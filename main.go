@@ -76,7 +76,6 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "get",
     Short: "get credential by key",
-    Args: cobra.MaximumNArgs(1),
     PreRun: PreRun,
     Run: Get,
   })
@@ -84,7 +83,6 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "store",
     Short: "store key=value pair",
-    Args: cobra.MaximumNArgs(2),
     PreRun: PreRun,
     Run: Store,
   })
@@ -92,7 +90,6 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "erase",
     Short: "erase credential by key",
-    Args: cobra.MaximumNArgs(1),
     PreRun: PreRun,
     Run: Erase,
   })
@@ -189,7 +186,7 @@ func Vault(_ *cobra.Command, args []string) {
 }
 
 // Get retrieves a credential from 1Password
-func Get(_ *cobra.Command, args []string) {
+func Get(_ *cobra.Command, _ []string) {
   bytes, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
     println(err.Error())
@@ -214,7 +211,7 @@ func Get(_ *cobra.Command, args []string) {
 }
 
 // Store upserts a credential in 1Password
-func Store(_ *cobra.Command, args []string) {
+func Store(_ *cobra.Command, _ []string) {
   value := fmt.Sprintf("%s:%s", username, password)
   item, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
@@ -241,7 +238,7 @@ func Store(_ *cobra.Command, args []string) {
 }
 
 // Erase removes a credential in 1Password
-func Erase(_ *cobra.Command, args []string) {
+func Erase(_ *cobra.Command, _ []string) {
   item, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
     os.Exit(1)
