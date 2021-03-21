@@ -1,9 +1,11 @@
 package main
 
 import (
+  "bufio"
   "fmt"
   "os"
   "os/exec"
+  "net/url"
   "path"
   "strings"
   "time"
@@ -32,11 +34,24 @@ var sessionTokenValueKey = fmt.Sprintf("%s.value", sessionTokenKey)
 
 const vaultKey = "vault"
 
-var vaultName = "git-credentials"
+var vaultName string
 var vaultNameKey = fmt.Sprintf("%s.name", vaultKey)
+const defaultVaultName = "git-credential"
 
 var vaultUUID string
 var vaultUUIDKey = fmt.Sprintf("%s.uuid", vaultKey)
+
+const vaultDescription = "Contains credentials managed by git-credential-1password."
+const missinVaultErrMsg = "missing vault: \"%s\"\ncreate a new vault with: git-credential-1password vault <vault-name>"
+
+// inputs
+
+var (
+  key      string
+  username string
+  password string
+  URL      *url.URL
+)
 
 // main
 
@@ -61,7 +76,7 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "get",
     Short: "retrieve credential by key",
-    Args: cobra.ExactArgs(1),
+    Args: cobra.MaximumNArgs(1),
     PreRun: PreRun,
     Run: Get,
   })
@@ -69,7 +84,7 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "store",
     Short: "store key/credential pair",
-    Args: cobra.ExactArgs(2),
+    Args: cobra.MaximumNArgs(2),
     PreRun: PreRun,
     Run: Store,
   })
@@ -77,7 +92,7 @@ func main() {
   rootCmd.AddCommand(&cobra.Command{
     Use:   "erase",
     Short: "erase credential by key",
-    Args: cobra.ExactArgs(1),
+    Args: cobra.MaximumNArgs(1),
     PreRun: PreRun,
     Run: Erase,
   })
@@ -98,8 +113,6 @@ func RegisterConfig() {
   viper.SetConfigName("config")
   viper.SetConfigType("yaml")
 
-  viper.SetDefault(vaultNameKey, vaultName)
-
   viper.SafeWriteConfig()
   err = viper.ReadInConfig()
   if err != nil {
@@ -110,45 +123,51 @@ func RegisterConfig() {
 // pre-run
 
 func PreRun(_ *cobra.Command, _ []string) {
+  ParseURL()
   PreRunSessionToken()
-  PreRunVaultUUID()
-  viper.WriteConfig()
+  name := viper.Get(vaultNameKey)
+  shouldUpsertVault := (name == nil || name == "")
+  if shouldUpsertVault {
+    viper.Set(vaultNameKey, defaultVaultName)
+  }
+  PreRunVaultUUID(shouldUpsertVault)
 }
 
 func PreRunSessionToken() {
   token, err := GetSessionToken()
   if err != nil {
-    Exit("prerun failed: session token", err)
+    os.Exit(1)
   }
 
   if token == "" {
     token, err = CreateSessionToken()
   }
   if err != nil {
-    Exit("prerun failed: session token", err)
+    os.Exit(1)
   }
 
   sessionToken = token
   viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
   viper.Set(sessionTokenValueKey, sessionToken)
+  viper.WriteConfig()
 }
 
-func PreRunVaultUUID() {
+func PreRunVaultUUID(shouldUpsert bool) {
   vaultName = GetVaultName()
-  uuid, err := GetVaultUUID()
-  if err != nil {
-    Exit("prerun failed: vault uuid", err)
+  uuid, err := GetVaultUUID(shouldUpsert)
+  if (!shouldUpsert && uuid == "") || err != nil {
+    os.Exit(1)
   }
-
+  if shouldUpsert && uuid == "" {
+    uuid, err = UpsertVaultUUID()
+  }
   if uuid == "" {
-    uuid, err = CreateVaultUUID()
-  }
-  if err != nil {
-    Exit("prerun failed: vault uuid", err)
+    os.Exit(1)
   }
 
   vaultUUID = uuid
   viper.Set(vaultUUIDKey, vaultUUID)
+  viper.WriteConfig()
 }
 
 // command
@@ -157,42 +176,56 @@ func Vault(_ *cobra.Command, args []string) {
   if len(args) == 0 {
     fmt.Println(GetVaultName())
   } else {
+    PreRunSessionToken()
+
     vaultName = args[0]
     viper.Set(vaultNameKey, vaultName)
     viper.Set(vaultUUIDKey, "")
     viper.WriteConfig()
+
+    PreRunVaultUUID(true)
+    viper.WriteConfig()
   }
 }
 
-// get retrieves a credential from 1Password
+// Get retrieves a credential from 1Password
 func Get(_ *cobra.Command, args []string) {
-  key := args[0]
-  bytes, err := OpGet("item", key, "--vault", vaultUUID)
+  bytes, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
-    Exit("unable to get credential", err)
+    println(err.Error())
+    os.Exit(1)
   }
 
   credential := gjson.Get(string(bytes), "details.password").String()
   if credential != "" {
-    fmt.Println(credential)
+    elements := strings.Split(credential, ":")
+    if URL.Scheme != "" {
+      fmt.Printf("protocol=%s\n", URL.Scheme)
+    }
+    if URL.Host != "" {
+      fmt.Printf("host=%s\n", URL.Host)
+    }
+    if URL.Path != "" {
+      fmt.Printf("path=%s\n", URL.Path)
+    }
+    fmt.Printf("username=%s\n", elements[0])
+    fmt.Printf("password=%s\n", strings.Join(elements[1:], ":"))
   }
 }
 
-// store upserts a credential in 1Password
+// Store upserts a credential in 1Password
 func Store(_ *cobra.Command, args []string) {
-  key := args[0]
-  value := args[1]
-
-  item, err := OpGet("item", key, "--vault", vaultUUID)
+  value := fmt.Sprintf("%s:%s", username, password)
+  item, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
-    Exit("unable to store credential", err)
+    os.Exit(1)
   }
 
   uuid := gjson.Get(item, "uuid").String()
   credential := gjson.Get(item, "password").String()
 
   if credential == value {
-    os.Exit(0)
+    os.Exit(1)
   }
 
   opArgs := []string{fmt.Sprintf("title=%s", key), fmt.Sprintf("password=%s", value), "--vault", vaultUUID}
@@ -203,28 +236,26 @@ func Store(_ *cobra.Command, args []string) {
     _, err = Op(append([]string{"edit", "item", uuid}, opArgs...)...)
   }
   if err != nil {
-    Exit("unable to store credential", err)
+    os.Exit(1)
   }
 }
 
-// erase removes a credential in 1Password
+// Erase removes a credential in 1Password
 func Erase(_ *cobra.Command, args []string) {
-  key := args[0]
-
-  item, err := OpGet("item", key, "--vault", vaultUUID)
+  item, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
-    Exit("unable to erase credential", err)
+    os.Exit(1)
   }
 
   uuid := gjson.Get(item, "uuid").String()
 
   if item == "" {
-    os.Exit(0)
+    os.Exit(1)
   }
 
   _, err = Op("delete", "item", uuid, "--vault", vaultUUID)
   if err != nil {
-    Exit("unable to erase credential", err)
+    os.Exit(1)
   }
 }
 
@@ -238,8 +269,8 @@ func GetVaultName() string {
   return ""
 }
 
-// getVaultUUID gets the configured vault's uuid.
-func GetVaultUUID() (string, error) {
+// GetVaultUUID gets the configured vault's uuid.
+func GetVaultUUID(silent bool) (string, error) {
   vaultUUIDIntf := viper.Get(vaultUUIDKey)
   if vaultUUIDIntf != nil {
     uuid := vaultUUIDIntf.(string)
@@ -248,7 +279,7 @@ func GetVaultUUID() (string, error) {
     }
   }
 
-  bytes, err := OpGet("vault", vaultName)
+  bytes, err := OpGet(silent, "vault", vaultName)
   if err != nil {
     return "", err
   }
@@ -256,14 +287,14 @@ func GetVaultUUID() (string, error) {
   return gjson.Get(string(bytes), "uuid").String(), nil
 }
 
-// createVaultUUID calls creates a new 1Passord vault and returns
+// UpsertVaultUUID calls creates a new 1Passord vault and returns
 // the newly created vault's uuid on success.
-func CreateVaultUUID() (string, error) {
+func UpsertVaultUUID() (string, error) {
   bytes, err := Op(
     "create",
     "vault", vaultName,
     "--allow-admins-to-manage", "false",
-    "--description", "'Contains credentials managed by git-credential-1password.'",
+    "--description", fmt.Sprintf("'%s'", vaultDescription),
   )
   if err != nil {
     return "", err
@@ -273,7 +304,7 @@ func CreateVaultUUID() (string, error) {
   return uuid, nil
 }
 
-// getSessionToken retrieves the locally stored session token, if still valid.
+// GetSessionToken retrieves the locally stored session token, if still valid.
 func GetSessionToken() (string, error) {
   start := time.Now()
   dateIntf := viper.Get(sessionTokenDateKey)
@@ -290,11 +321,12 @@ func GetSessionToken() (string, error) {
   return "", nil
 }
 
-// createSessionToken requests the user to sign into 1Password through
+// CreateSessionToken requests the user to sign into 1Password through
 // stdin, then stores the provided session token in the local config.
 func CreateSessionToken() (string, error) {
-  bytes, err := Op("signin", "my", "--raw")
+  bytes, err := Op("signin", "--raw")
   if err != nil {
+    println()
     return "", err
   }
 
@@ -303,23 +335,28 @@ func CreateSessionToken() (string, error) {
 
 // op helpers
 
-// op wraps 1Password's cli tool op.
+// Op wraps 1Password's cli tool op.
 func Op(args ...string) ([]byte, error) {
   cmd := exec.Command("op", append(args, "--session", sessionToken)...)
   cmd.Stdin = os.Stdin
   cmd.Stderr = os.Stderr
-   return cmd.Output()
+  return cmd.Output()
 }
 
-// opGet wraps op get and hides stderr
-func OpGet(args ...string) (string, error) {
+// OpGet wraps op get and hides stderr
+func OpGet(silent bool, args ...string) (string, error) {
   cmd := exec.Command("op", append(append([]string{"get"}, args...), "--session", sessionToken)...)
   cmd.Stdin = os.Stdin
 
-   bytes, _ := cmd.Output()
-  out := string(bytes)
+  bytes, _ := cmd.CombinedOutput()
+  out := strings.Trim(string(bytes), whitespace)
 
-  if strings.HasPrefix(strings.TrimPrefix(out, whitespace), "[ERROR]") {
+  if !silent && strings.Contains(out, "doesn't seem to be a vault in this account") {
+    println(fmt.Sprintf(missinVaultErrMsg, vaultName))
+    viper.Set(vaultUUIDKey, "")
+    viper.WriteConfig()
+  }
+  if strings.HasPrefix(out, "[ERROR]") {
     return "", nil
   }
   return out, nil
@@ -327,13 +364,36 @@ func OpGet(args ...string) (string, error) {
 
 // helpers
 
-// exit takes a msg and optional list of errors, prints them
-// and exits with status code 1.
-func Exit(msg string, errs ...error) {
-  if len(errs) > 0 && errs[0] != nil {
-    fmt.Printf("%s: %s", msg, errs[0].Error())
-  } else {
-    fmt.Println(msg)
+// ParseURL reads from stdin and sets key, username and password.
+func ParseURL() {
+  URL = &url.URL{}
+  var rawurl string
+
+  scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+    line := scanner.Text()
+    if line == "" {
+      break
+    }
+    if strings.HasPrefix(line, "protocol=") { URL.Scheme = strings.TrimPrefix(line, "protocol=") }
+    if strings.HasPrefix(line, "username=") { username   = strings.TrimPrefix(line, "username=") }
+    if strings.HasPrefix(line, "password=") { password   = strings.TrimPrefix(line, "password=") }
+    if strings.HasPrefix(line, "host=")     { URL.Host   = strings.TrimPrefix(line, "host=") }
+    if strings.HasPrefix(line, "path=")     { URL.Path   = strings.TrimPrefix(line, "path=") }
+    if strings.HasPrefix(line, "url=")      { rawurl     = strings.TrimPrefix(line, "url=") }
   }
-  os.Exit(1)
+  os.Stdin.Close()
+
+  if rawurl != "" {
+    URL, err := url.Parse(rawurl)
+    if err != nil {
+      os.Exit(1)
+    }
+    if URL.User.Username() != "" {
+      username = URL.User.Username()
+    }
+    URL.User = nil
+  }
+
+  key = URL.String()
 }
