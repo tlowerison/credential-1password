@@ -15,10 +15,21 @@ import (
   "github.com/tidwall/gjson"
 )
 
-const app = "git-credential-1password"
+type Mode string
+
+const (
+  gitMode    Mode = "git"
+  dockerMode Mode = "docker"
+)
+
+var ModeLdFlag = string(gitMode)
+var mode = Mode(ModeLdFlag)
+
+var app = fmt.Sprintf("%s-credential-1password", string(mode))
 
 // util
 
+var homeDir string
 const whitespace = " \n\t"
 
 // config
@@ -36,13 +47,13 @@ const vaultKey = "vault"
 
 var vaultName string
 var vaultNameKey = fmt.Sprintf("%s.name", vaultKey)
-const defaultVaultName = "git-credential"
+var defaultVaultName = fmt.Sprintf("%s-credential", string(mode))
 
 var vaultUUID string
 var vaultUUIDKey = fmt.Sprintf("%s.uuid", vaultKey)
 
-const vaultDescription = "Contains credentials managed by git-credential-1password."
-const missinVaultErrMsg = "missing vault: \"%s\"\ncreate a new vault with: git-credential-1password vault <vault-name>"
+var vaultDescription = fmt.Sprintf("Contains credentials managed by %s.", app)
+var missinVaultErrMsg = fmt.Sprintf("missing vault: \"%s\"\ncreate a new vault with: %s vault <vault-name>", app)
 
 // inputs
 
@@ -60,7 +71,7 @@ func main() {
 
   rootCmd := &cobra.Command{
     Use:   app,
-    Short: fmt.Sprintf("git-credential helper for 1Password.", app),
+    Short: fmt.Sprintf("credential helper for 1Password.", app),
     Run: func(cmd *cobra.Command, _ []string) {
       fmt.Println(cmd.UsageString())
     },
@@ -68,7 +79,7 @@ func main() {
 
   rootCmd.AddCommand(&cobra.Command{
     Use:   "vault",
-    Short: "get/set the vault that git-credential uses",
+    Short: "get/set the vault that credential uses",
     Args: cobra.RangeArgs(0, 1),
     Run: Vault,
   })
@@ -98,7 +109,8 @@ func main() {
 }
 
 func RegisterConfig() {
-  homeDir, err := os.UserHomeDir()
+  var err error
+  homeDir, err = os.UserHomeDir()
   if err != nil {
     panic(err)
   }
@@ -119,8 +131,8 @@ func RegisterConfig() {
 
 // pre-run
 
-func PreRun(_ *cobra.Command, _ []string) {
-  ParseURL()
+func PreRun(cmd *cobra.Command, _ []string) {
+  ParseURL(cmd)
   PreRunSessionToken()
   name := viper.Get(vaultNameKey)
   shouldUpsertVault := (name == nil || name == "")
@@ -196,17 +208,32 @@ func Get(_ *cobra.Command, _ []string) {
   credential := gjson.Get(string(bytes), "details.password").String()
   if credential != "" {
     elements := strings.Split(credential, ":")
-    if URL.Scheme != "" {
-      fmt.Printf("protocol=%s\n", URL.Scheme)
+    username := elements[0]
+    password := strings.Join(elements[1:], ":")
+    switch mode {
+    case gitMode:
+      if URL != nil && URL.Scheme != "" {
+        fmt.Printf("protocol=%s\n", URL.Scheme)
+      }
+      if URL != nil && URL.Host != "" {
+        fmt.Printf("host=%s\n", URL.Host)
+      }
+      if URL != nil && URL.Path != "" {
+        fmt.Printf("path=%s\n", URL.Path)
+      }
+      fmt.Printf("username=%s\n", username)
+      fmt.Printf("password=%s\n", password)
+      break
+    case dockerMode:
+      var serverURL string
+      if URL != nil {
+        serverURL = URL.String()
+      }
+      fmt.Println(fmt.Sprintf(`{"ServerURL":"%s","Username":"%s","Secret":"%s"}`, serverURL, username, password))
+      break
+    default:
+      break
     }
-    if URL.Host != "" {
-      fmt.Printf("host=%s\n", URL.Host)
-    }
-    if URL.Path != "" {
-      fmt.Printf("path=%s\n", URL.Path)
-    }
-    fmt.Printf("username=%s\n", elements[0])
-    fmt.Printf("password=%s\n", strings.Join(elements[1:], ":"))
   }
 }
 
@@ -362,27 +389,43 @@ func OpGet(silent bool, args ...string) (string, error) {
 // helpers
 
 // ParseURL reads from stdin and sets key, username and password.
-func ParseURL() {
+func ParseURL(cmd *cobra.Command) {
   URL = &url.URL{}
   var rawurl string
 
   scanner := bufio.NewScanner(os.Stdin)
+  lines := []string{}
 	for scanner.Scan() {
     line := scanner.Text()
+    lines = append(lines, line)
     if line == "" {
       break
     }
-    if strings.HasPrefix(line, "protocol=") { URL.Scheme = strings.TrimPrefix(line, "protocol=") }
-    if strings.HasPrefix(line, "username=") { username   = strings.TrimPrefix(line, "username=") }
-    if strings.HasPrefix(line, "password=") { password   = strings.TrimPrefix(line, "password=") }
-    if strings.HasPrefix(line, "host=")     { URL.Host   = strings.TrimPrefix(line, "host=") }
-    if strings.HasPrefix(line, "path=")     { URL.Path   = strings.TrimPrefix(line, "path=") }
-    if strings.HasPrefix(line, "url=")      { rawurl     = strings.TrimPrefix(line, "url=") }
+    if mode == gitMode {
+      if strings.HasPrefix(line, "protocol=") { URL.Scheme = strings.TrimPrefix(line, "protocol=") }
+      if strings.HasPrefix(line, "username=") { username   = strings.TrimPrefix(line, "username=") }
+      if strings.HasPrefix(line, "password=") { password   = strings.TrimPrefix(line, "password=") }
+      if strings.HasPrefix(line, "host=")     { URL.Host   = strings.TrimPrefix(line, "host=") }
+      if strings.HasPrefix(line, "path=")     { URL.Path   = strings.TrimPrefix(line, "path=") }
+      if strings.HasPrefix(line, "url=")      { rawurl     = strings.TrimPrefix(line, "url=") }
+    }
   }
   os.Stdin.Close()
 
+  if mode == dockerMode {
+    input := strings.Join(lines, "\n")
+    if cmd.Use == "store" {
+      rawurl = strings.TrimPrefix(gjson.Get(input, "ServerURL").String(), whitespace)
+      username = strings.TrimPrefix(gjson.Get(input, "Username").String(), whitespace)
+      password = strings.TrimPrefix(gjson.Get(input, "Secret").String(), whitespace)
+    } else {
+      rawurl = input
+    }
+  }
+
   if rawurl != "" {
-    URL, err := url.Parse(rawurl)
+    var err error
+    URL, err = url.Parse(rawurl)
     if err != nil {
       os.Exit(1)
     }

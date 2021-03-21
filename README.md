@@ -1,12 +1,14 @@
-# git-credential-1password
+# credential-1password
 
-git-credential helper for 1Password. Supports specifying which vault should store credentials.
+Credential helper for 1Password. Supports specifying which vault should store credentials.
 
 ### Install
-`git-credential-1password` relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started). Then, we'll download, install and setup `git-credential-1password`.
+`credential-1password` relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
+
+#### Install for git
 ```sh
 # pull binary and store in /usr/local/bin
-wget https://github.com/tlowerison/git-credential-1password/releases/download/v1.0.0/git-credential-1password -q -O /usr/local/bin/git-credential-1password
+wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.0/git-credential-1password -q -O /usr/local/bin/git-credential-1password
 
 # give executable permission
 chmod u+x /usr/local/bin/git-credential-1password
@@ -48,21 +50,39 @@ printf $'protocol=https\nhost=github.com\n' | git-credential-1password get
 # git clone https://github.com/my-username/my-repo.git
 ```
 
-### Usage
-```
-Usage:
-  git-credential-1password [flags]
-  git-credential-1password [command]
+#### Install for Docker
+Update your docker version to at least `20.10.4`, there was a bug fix included that fixed docker from segfaulting when using custom credential helpers ([relevant pr](https://github.com/docker/cli/pull/2959)).
+```sh
+# logout of docker to remove old credentials
+docker logout
 
-Available Commands:
-  erase       erase credential by key
-  get         get credential by key
-  help        Help about any command
-  store       store key=value pair
-  vault       get/set the vault that git-credential uses
+# pull binary and store in /usr/local/bin
+wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.0/docker-credential-1password -q -O /usr/local/bin/docker-credential-1password
 
-Flags:
-  -h, --help   help for git-credential-1password
+# give executable permission
+chmod u+x /usr/local/bin/docker-credential-1password
 
-Use "git-credential-1password [command] --help" for more information about a command.
+# reload PATH
+source ~/.bash_profile
+
+# update credsStore in docker config
+jq --argjson credsStore '"1password"' 'setpath(["credsStore"]; $credsStore)' ~/.docker/config.json > ~/.docker/.tmp.json && mv ~/.docker/.tmp.json ~/.docker/config.json
+
+# Optional: set the name of the vault you want to store credentials in. Default: docker-credential
+# docker-credential-1password vault <vault-name>
+
+# login into your docker registry
+# NOTE: As of now, it's essential to use the '--username' flag instead of providing as part of stdin.
+# - Bug report out at https://github.com/docker/cli/issues/3022
+# - Read more about the docker login command at https://docs.docker.com/engine/reference/commandline/login
+docker login --username=<my-username>
+# > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
+# > Password: [type Personal Access Token here]
+
+# confirm that your credentials are stored and retrievable
+printf 'https://index.docker.io/v1/' | docker-credential-1password get
+# > {"ServerURL":"https://index.docker.io/v1/","Username":"my-username","Secret":"my-secret"}
+
+# finally, pull a private image from your logged-in registry
+docker pull repo/image:tag
 ```

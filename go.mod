@@ -1,4 +1,4 @@
-module github.com/tlowerison/git-credential-1password
+module github.com/tlowerison/credential-1password
 
 go 1.16
 
