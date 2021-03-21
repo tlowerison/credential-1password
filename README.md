@@ -34,7 +34,7 @@ git config --global credential.helper 1password
 #   > password=my-password
 #   >
 #   > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
-# note: you probably want to use a Github Personal Access Token instead of your actual password here
+# note: you probably want to use a Github Personal Access Token here instead of your actual password
 git-credential-1password store
 
 # confirm that your credentials are stored and retrievable
