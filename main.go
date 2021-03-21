@@ -311,8 +311,7 @@ func Op(args ...string) ([]byte, error) {
    return cmd.Output()
 }
 
-// opGet wraps op get with hidden stderr and missing resources
-// returned as an empty json object.
+// opGet wraps op get and hides stderr
 func OpGet(args ...string) (string, error) {
   cmd := exec.Command("op", append(append([]string{"get"}, args...), "--session", sessionToken)...)
   cmd.Stdin = os.Stdin
