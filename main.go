@@ -75,7 +75,7 @@ func main() {
 
   rootCmd.AddCommand(&cobra.Command{
     Use:   "get",
-    Short: "retrieve credential by key",
+    Short: "get credential by key",
     Args: cobra.MaximumNArgs(1),
     PreRun: PreRun,
     Run: Get,

@@ -26,7 +26,7 @@ git config --global credential.helper 1password
 
 # store your credentials using key=value pairs passed into stdin
 # - stdin then opens, will closes after receiving two newlines
-# - after stdin closes, you'll be asked to sign into 1Password if it's been 30 minutes since you last accessed 1Password with `op` or `git-credential-1password`
+# - after stdin closes, you'll be asked to sign into 1Password if it's been 30 minutes since you last accessed 1Password with git-credential-1password
 # Ex: git-credential-1password store
 #   > protocol=https
 #   > host=github.com
@@ -56,7 +56,7 @@ Usage:
 
 Available Commands:
   erase       erase credential by key
-  get         retrieve credential by key
+  get         get credential by key
   help        Help about any command
   store       store key/credential pair
   vault       get/set the vault that git-credential uses
