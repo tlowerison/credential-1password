@@ -204,58 +204,65 @@ func Get(_ *cobra.Command, _ []string) {
     println(err.Error())
     os.Exit(1)
   }
+  output := string(bytes)
 
-  credential := gjson.Get(string(bytes), "details.password").String()
-  if credential != "" {
-    elements := strings.Split(credential, ":")
-    username := elements[0]
-    password := strings.Join(elements[1:], ":")
-    switch mode {
-    case gitMode:
-      if URL != nil && URL.Scheme != "" {
-        fmt.Printf("protocol=%s\n", URL.Scheme)
-      }
-      if URL != nil && URL.Host != "" {
-        fmt.Printf("host=%s\n", URL.Host)
-      }
-      if URL != nil && URL.Path != "" {
-        fmt.Printf("path=%s\n", URL.Path)
-      }
-      fmt.Printf("username=%s\n", username)
-      fmt.Printf("password=%s\n", password)
-      break
-    case dockerMode:
-      var serverURL string
-      if URL != nil {
-        serverURL = URL.String()
-      }
-      fmt.Println(fmt.Sprintf(`{"ServerURL":"%s","Username":"%s","Secret":"%s"}`, serverURL, username, password))
-      break
-    default:
-      break
+  queryField := func(field string) string {
+    query := fmt.Sprintf("details.fields.#(designation==\"%s\").value", field)
+    return gjson.Get(output, query).String()
+  }
+
+  username := queryField("username")
+  password := queryField("password")
+  switch mode {
+  case gitMode:
+    if URL != nil && URL.Scheme != "" {
+      fmt.Printf("protocol=%s\n", URL.Scheme)
     }
+    if URL != nil && URL.Host != "" {
+      fmt.Printf("host=%s\n", URL.Host)
+    }
+    if URL != nil && URL.Path != "" {
+      fmt.Printf("path=%s\n", URL.Path)
+    }
+    if username != "" {
+      fmt.Printf("username=%s\n", username)
+    }
+    if password != "" {
+      fmt.Printf("password=%s\n", password)
+    }
+    break
+  case dockerMode:
+    var serverURL string
+    if URL != nil {
+      serverURL = URL.String()
+    }
+    fmt.Println(fmt.Sprintf(`{"ServerURL":"%s","Username":"%s","Secret":"%s"}`, serverURL, username, password))
+    break
+  default:
+    break
   }
 }
 
 // Store upserts a credential in 1Password
 func Store(_ *cobra.Command, _ []string) {
-  value := fmt.Sprintf("%s:%s", username, password)
+  // value := fmt.Sprintf("%s:%s", username, password)
   item, err := OpGet(false, "item", key, "--vault", vaultUUID)
   if err != nil {
     os.Exit(1)
   }
 
   uuid := gjson.Get(item, "uuid").String()
-  credential := gjson.Get(item, "password").String()
+  storedUsername := gjson.Get(item, "username").String()
+  storedPassword := gjson.Get(item, "password").String()
 
-  if credential == value {
+  if username == storedUsername && password == storedPassword {
     os.Exit(1)
   }
 
-  opArgs := []string{fmt.Sprintf("title=%s", key), fmt.Sprintf("password=%s", value), "--vault", vaultUUID}
+  opArgs := []string{fmt.Sprintf("title=%s", key), fmt.Sprintf("username=%s", username), fmt.Sprintf("password=%s", password), "--vault", vaultUUID}
 
   if uuid == "" {
-    _, err = Op(append([]string{"create", "item", "Password"}, opArgs...)...)
+    _, err = Op(append([]string{"create", "item", "Login"}, opArgs...)...)
   } else {
     _, err = Op(append([]string{"edit", "item", uuid}, opArgs...)...)
   }
