@@ -53,7 +53,7 @@ var vaultUUID string
 var vaultUUIDKey = fmt.Sprintf("%s.uuid", vaultKey)
 
 var vaultDescription = fmt.Sprintf("Contains credentials managed by %s.", app)
-var missinVaultErrMsg = fmt.Sprintf("missing vault: \"%s\"\ncreate a new vault with: %s vault <vault-name>", app)
+var missinVaultErrMsg = "no vault found with name: \"%s\"\ncreate a new vault with: %s vault <vault-name>"
 
 // inputs
 
@@ -383,9 +383,10 @@ func OpGet(silent bool, args ...string) (string, error) {
   out := strings.Trim(string(bytes), whitespace)
 
   if !silent && strings.Contains(out, "doesn't seem to be a vault in this account") {
-    println(fmt.Sprintf(missinVaultErrMsg, vaultName))
+    println(fmt.Sprintf(missinVaultErrMsg, vaultName, app))
     viper.Set(vaultUUIDKey, "")
     viper.WriteConfig()
+    os.Exit(1)
   }
   if strings.HasPrefix(out, "[ERROR]") {
     return "", nil

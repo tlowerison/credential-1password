@@ -76,8 +76,8 @@ jq --argjson credsStore '"1password"' 'setpath(["credsStore"]; $credsStore)' ~/.
 # - Bug report out at https://github.com/docker/cli/issues/3022
 # - Read more about the docker login command at https://docs.docker.com/engine/reference/commandline/login
 docker login --username=<my-username>
-# > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
 # > Password: [type Personal Access Token here]
+# > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
 
 # confirm that your credentials are stored and retrievable
 printf 'https://index.docker.io/v1/' | docker-credential-1password get
