@@ -2,6 +2,13 @@
 
 git-credential helper for 1Password. Supports specifying which vault should store credentials.
 
+### Install
+```
+wget https://github.com/tlowerison/git-credential-1password/releases/download/v1.0.0/git-credential-1password -q -O /usr/local/bin/git-credential-1password
+chmod u+x /usr/local/bin/git-credential-1password
+source ~/.bash_profile
+```
+
 ### Usage
 ```
 Usage:
