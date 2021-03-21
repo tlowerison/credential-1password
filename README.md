@@ -58,7 +58,7 @@ Available Commands:
   erase       erase credential by key
   get         get credential by key
   help        Help about any command
-  store       store key/credential pair
+  store       store key=value pair
   vault       get/set the vault that git-credential uses
 
 Flags:
