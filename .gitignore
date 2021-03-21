@@ -1,0 +1,7 @@
+# Ignore binaries
+*
+!/**/
+!*.*
+!LICENSE
+
+**/.DS_STORE
