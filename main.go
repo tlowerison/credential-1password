@@ -83,7 +83,7 @@ func main() {
 
   rootCmd.AddCommand(&cobra.Command{
     Use:   "store",
-    Short: "store key/credential pair",
+    Short: "store key=value pair",
     Args: cobra.MaximumNArgs(2),
     PreRun: PreRun,
     Run: Store,
