@@ -1,3 +1,4 @@
+///usr/bin/env go run "$0" "$@"; exit "$?"
 package main
 
 import (
@@ -7,6 +8,7 @@ import (
   "os/exec"
   "net/url"
   "path"
+  "regexp"
   "strings"
   "time"
 
@@ -72,13 +74,6 @@ func main() {
     },
   }
 
-  rootCmd.AddCommand(&cobra.Command{
-    Use:   "signin",
-    Short: "signin through stdin to create 1password session token",
-    Args:  cobra.ExactArgs(0),
-    Run:   asRun(Signin),
-  })
-
   sessionCmd := &cobra.Command{
     Use:   "session",
     Short: "get/set a session token",
@@ -92,7 +87,7 @@ func main() {
   })
 
   sessionCmd.AddCommand(&cobra.Command{
-    Use: "set",
+    Use:   "set",
     Short: "set a session token provided through stdin",
     Args:  cobra.ExactArgs(0),
     Run:   asRun(SessionSet),
@@ -152,11 +147,61 @@ func RegisterConfig() {
   }
 }
 
+// --- command wrappers ---
+
+func asRun(fn func() error) func(_ *cobra.Command, _ []string) {
+  return func(cmd *cobra.Command, args []string) {
+    withSessionRetry(cmd, args, fn)
+  }
+}
+
+func asRunWithArgs(fn func(args []string) error) func(_ *cobra.Command, args []string) {
+  return func(cmd *cobra.Command, args []string) {
+    withSessionRetry(cmd, args, func() error { return fn(args) })
+  }
+}
+
+func withSessionRetry(cmd *cobra.Command, args []string, fn func() error) {
+  err := fn()
+  if shouldClearSessionAndRetry(err) {
+    ClearSessionToken()
+    if cmd.PreRun != nil {
+      cmd.PreRun(cmd, args)
+    }
+    err = fn()
+  }
+  handleErr(err)
+}
+
+func handleErr(err error) {
+  if err != nil {
+    fmt.Fprintln(os.Stderr, err.Error())
+    os.Exit(1)
+  }
+}
+
+var retryRegexp = regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} You are not currently signed in. Please run `op signin --help` for instructions")
+
+func shouldClearSessionAndRetry(err error) bool {
+  return err != nil && retryRegexp.MatchString(err.Error())
+}
+
 // --- command pre-runs ---
 
-func PreRun(cmd *cobra.Command, _ []string) {
-  handleErr(ParseURL(cmd))
-  handleErr(PreRunSessionToken())
+func PreRun(cmd *cobra.Command, args []string) {
+  withSessionRetry(cmd, args, func() error { return preRun(cmd) })
+}
+
+func preRun(cmd *cobra.Command) error {
+  err := ParseURL(cmd)
+  if err != nil {
+    return err
+  }
+
+  err = PreRunSessionToken()
+  if err != nil {
+    return err
+  }
 
   name := viper.Get(vaultNameKey)
   shouldUpsertVault := (name == nil || name == "")
@@ -164,7 +209,11 @@ func PreRun(cmd *cobra.Command, _ []string) {
     viper.Set(vaultNameKey, defaultVaultName)
   }
 
-  handleErr(PreRunVaultUUID(shouldUpsertVault))
+  err = PreRunVaultUUID(shouldUpsertVault)
+  if err != nil {
+    return err
+  }
+  return nil
 }
 
 func PreRunSessionToken() error {
@@ -215,32 +264,7 @@ func PreRunVaultUUID(shouldUpsert bool) error {
   return nil
 }
 
-// --- command wrappers ---
-
-func asRun(fn func() error) func(_ *cobra.Command, _ []string) {
-  return func(_ *cobra.Command, _ []string) {
-    handleErr(fn())
-  }
-}
-
-func asRunWithArgs(fn func(args []string) error) func(_ *cobra.Command, args []string) {
-  return func(_ *cobra.Command, args []string) {
-    handleErr(fn(args))
-  }
-}
-
-func handleErr(err error) {
-  if err != nil {
-    fmt.Fprintln(os.Stderr, err.Error())
-    os.Exit(1)
-  }
-}
-
 // --- commands ---
-
-func Signin() error {
-  return PreRunSessionToken()
-}
 
 func SessionGet() error {
   err := PreRunSessionToken()
@@ -446,6 +470,12 @@ func CreateSessionToken() (string, error) {
   return strings.TrimSpace(string(outBytes)), nil
 }
 
+func ClearSessionToken() {
+  viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
+  viper.Set(sessionTokenValueKey, "")
+  viper.WriteConfig()
+}
+
 // --- op helpers ---
 
 // Op wraps 1Password's cli tool op.
@@ -472,7 +502,7 @@ func OpGet(silent bool, args ...string) (string, error) {
     return "", err
   }
   if strings.HasPrefix(out, "[ERROR]") {
-    return "", nil
+    return "", fmt.Errorf(out)
   }
   return out, nil
 }
@@ -481,6 +511,12 @@ func OpGet(silent bool, args ...string) (string, error) {
 
 // ParseURL reads from stdin and sets key, username and password.
 func ParseURL(cmd *cobra.Command) error {
+  // if key is not empty, we've already parsed input so
+  // we don't want to parse again, that will clear key, username, etc.
+  if key != "" {
+    return nil
+  }
+
   URL = &url.URL{}
   var rawurl string
 
