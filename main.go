@@ -79,12 +79,26 @@ func main() {
     Run:   asRun(Signin),
   })
 
-  rootCmd.AddCommand(&cobra.Command{
+  sessionCmd := &cobra.Command{
     Use:   "session",
-    Short: "store a session token for later use",
+    Short: "get/set a session token",
+  }
+
+  sessionCmd.AddCommand(&cobra.Command{
+    Use: "get",
+    Short: "get the current session token, creates one if none exists",
     Args:  cobra.ExactArgs(0),
-    Run:   asRun(Session),
+    Run:   asRun(SessionGet),
   })
+
+  sessionCmd.AddCommand(&cobra.Command{
+    Use: "set",
+    Short: "set a session token provided through stdin",
+    Args:  cobra.ExactArgs(0),
+    Run:   asRun(SessionSet),
+  })
+
+  rootCmd.AddCommand(sessionCmd)
 
   rootCmd.AddCommand(&cobra.Command{
     Use:   "vault",
@@ -228,7 +242,18 @@ func Signin() error {
   return PreRunSessionToken()
 }
 
-func Session() error {
+func SessionGet() error {
+  err := PreRunSessionToken()
+  if err != nil {
+    return err
+  }
+  if sessionToken != "" {
+    fmt.Println(sessionToken)
+  }
+  return nil
+}
+
+func SessionSet() error {
   reader := bufio.NewReader(os.Stdin)
   line, err := reader.ReadString('\n')
   if err != nil && err.Error() != "EOF" {
