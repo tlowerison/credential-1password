@@ -80,6 +80,13 @@ func main() {
   })
 
   rootCmd.AddCommand(&cobra.Command{
+    Use:   "session",
+    Short: "store a session token for later use",
+    Args:  cobra.ExactArgs(0),
+    Run:   asRun(Session),
+  })
+
+  rootCmd.AddCommand(&cobra.Command{
     Use:   "vault",
     Short: "get/set the vault that credential uses",
     Args:  cobra.RangeArgs(0, 1),
@@ -219,6 +226,20 @@ func handleErr(err error) {
 
 func Signin() error {
   return PreRunSessionToken()
+}
+
+func Session() error {
+  reader := bufio.NewReader(os.Stdin)
+  line, err := reader.ReadString('\n')
+  if err != nil && err.Error() != "EOF" {
+    return err
+  }
+
+  sessionToken = strings.TrimSpace(line)
+  viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
+  viper.Set(sessionTokenValueKey, sessionToken)
+  viper.WriteConfig()
+  return nil
 }
 
 func Vault(args []string) error {
