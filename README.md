@@ -158,7 +158,7 @@ docker-build() {
     eval $finally
   }
 
-  # set extdebug enables us to trap return signals
+  # set extdebug to trap return signals
   shopt -s extdebug
 
   # execute try clause
