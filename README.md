@@ -1,11 +1,11 @@
 # credential-1password
 
-Credential helper for 1Password. Supports specifying which vault should store credentials.
+1Password credential helpers for git + docker
 
 ### Install
 `credential-1password` relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
 
-#### Install for git
+### Install for git
 ```sh
 # pull binary and store in /usr/local/bin
 wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.1/git-credential-1password -q -O /usr/local/bin/git-credential-1password
@@ -50,7 +50,7 @@ printf $'protocol=https\nhost=github.com\n' | git-credential-1password get
 # git clone https://github.com/my-username/my-repo.git
 ```
 
-#### Install for Docker
+### Install for Docker
 Update your docker version to at least `20.10.4`, there was a bug fix included that fixed docker from segfaulting when using custom credential helpers ([relevant pr](https://github.com/docker/cli/pull/2959)).
 ```sh
 # logout of docker to remove old credentials
