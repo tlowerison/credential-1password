@@ -74,6 +74,16 @@ func main() {
     },
   }
 
+  rootCmd.AddCommand(&cobra.Command{
+    Use:   "signin",
+    Short: "signin into op with stdin",
+    Long:  "signin into op with stdin; other commands will also prompt your master password but after processing stdin for credential related input",
+    Args:  cobra.ExactArgs(0),
+    Run: func(_ *cobra.Command, _ []string) {
+      handleErr(Signin())
+    },
+  })
+
   sessionCmd := &cobra.Command{
     Use:   "session",
     Short: "get/set a session token",
@@ -265,6 +275,20 @@ func PreRunVaultUUID(shouldUpsert bool) error {
 }
 
 // --- commands ---
+
+func Signin() error {
+  token, err := CreateSessionToken()
+  if err != nil {
+    return err
+  }
+
+  sessionToken = token
+  viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
+  viper.Set(sessionTokenValueKey, sessionToken)
+  viper.WriteConfig()
+
+  return nil
+}
 
 func SessionGet() error {
   err := PreRunSessionToken()
@@ -502,7 +526,12 @@ func OpGet(silent bool, args ...string) (string, error) {
     return "", err
   }
   if strings.HasPrefix(out, "[ERROR]") {
-    return "", fmt.Errorf(out)
+    err := fmt.Errorf(out)
+    if shouldClearSessionAndRetry(err) {
+      return "", err
+    } else {
+      return "", nil
+    }
   }
   return out, nil
 }
