@@ -45,7 +45,7 @@ printf $'protocol=https\nhost=github.com\n' | git-credential-1password get
 # > password=my-password
 
 # finally, clone a private repo connected to the credentials you stored
-# git clone https://github.com/username/repo.git
+git clone https://github.com/username/repo.git
 ```
 
 ### Install for Docker
@@ -84,7 +84,7 @@ printf 'https://index.docker.io/v1/' | docker-credential-1password get
 # > {"ServerURL":"https://index.docker.io/v1/","Username":"my-username","Secret":"my-secret"}
 
 # finally, pull a private image from your registry
-# docker pull repo/image:tag
+docker pull repo/image:tag
 ```
 
 ## Use git credentials in docker builds
