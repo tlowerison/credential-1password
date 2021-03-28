@@ -96,17 +96,12 @@ The idea is to wrap `docker build` with an alias `docker-build` which will:
 - format those credentials into url format for use with the basic `store` git credential helper in our Dockerfile
 - call `docker build` with (a) all the same arguments provided to `docker-build` and (b) our git credentials
 
-In order to use the git credentials in your Dockerfile, set the git credential helper at the start of the file to look for the mounted credential secret:
+In order to use the pulled git credentials, set the git credential helper at the start of your Dockerfile to look for the mounted credentials:
 ```docker
 RUN git config --global credential.helper 'store --file=/run/secrets/git-credentials'
 ```
 
 Then, for any commands which need git credentials to succeed, prefix the command with a secret mount like so:
-```docker
-RUN --mount=type=secret,id=git-credentials
-```
-
-An example usage could be when you need to clone a private git repo or download go modules from a private git repo:
 ```docker
 RUN --mount=type=secret,id=git-credentials git clone https://github.com/username/repo.git
 ```
