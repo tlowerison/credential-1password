@@ -87,9 +87,9 @@ printf 'https://index.docker.io/v1/' | docker-credential-1password get
 docker pull repo/image:tag
 ```
 
-## Using git credentials in docker builds
+## Use git credentials in docker builds
 
-Combining `git-credential-1password` and [Docker BuildKit](https://docs.docker.com/develop/develop-images/build_enhancements/#new-docker-build-secret-information) allows us to safely inject git credentials into containers at build time.
+Combining `git-credential-1password` and [Docker BuildKit secrets](https://docs.docker.com/develop/develop-images/build_enhancements/#new-docker-build-secret-information) allows us to safely inject git credentials into containers at build time.
 
 The idea is to wrap `docker build` with an alias `docker-build` which will:
 - pull your git credentials with `git-credential-1password get`
