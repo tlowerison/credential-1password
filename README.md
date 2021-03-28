@@ -26,16 +26,15 @@ git config --global credential.helper 1password
 # git-credential-1password vault <vault-name>
 
 # store your credentials using key=value pairs passed into stdin
-# - stdin then opens, will closes after receiving two newlines
+# - stdin then opens, will close after receiving two newlines
 # - after stdin closes, you'll be asked to sign into 1Password if it's been 30 minutes since you last accessed 1Password with git-credential-1password
 # Ex: git-credential-1password store
 #   > protocol=https
 #   > host=github.com
 #   > username=my-username
-#   > password=my-password
+#   > password=my-password # NOTE: you probably want to use a Github Personal Access Token here
 #   >
 #   > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
-# note: you probably want to use a Github Personal Access Token here instead of your actual password
 git-credential-1password store
 
 # confirm that your credentials are stored and retrievable
@@ -46,7 +45,7 @@ printf $'protocol=https\nhost=github.com\n' | git-credential-1password get
 # > password=my-password
 
 # finally, clone a private repo connected to the credentials you stored
-# git clone https://github.com/my-username/my-repo.git
+# git clone https://github.com/username/repo.git
 ```
 
 ### Install for Docker
@@ -71,19 +70,21 @@ jq --argjson credsStore '"1password"' 'setpath(["credsStore"]; $credsStore)' ~/.
 # docker-credential-1password vault <vault-name>
 
 # login into your docker registry
-# NOTE: As of now, it's essential to use the '--username' flag instead of providing as part of stdin.
+# NOTE: As of now, it's essential to use the '--username' flag instead of providing username through stdin.
 # - Bug report out at https://github.com/docker/cli/issues/3022
 # - Read more about the docker login command at https://docs.docker.com/engine/reference/commandline/login
+#
+# Ex: docker login --username=<my-username>
+#   > Password: [type Personal Access Token here]
+#   > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
 docker login --username=<my-username>
-# > Password: [type Personal Access Token here]
-# > Enter the password for <my-1password@email.com> at my.1password.com: [type master password here]
 
 # confirm that your credentials are stored and retrievable
 printf 'https://index.docker.io/v1/' | docker-credential-1password get
 # > {"ServerURL":"https://index.docker.io/v1/","Username":"my-username","Secret":"my-secret"}
 
-# finally, pull a private image from your logged-in registry
-docker pull repo/image:tag
+# finally, pull a private image from your registry
+# docker pull repo/image:tag
 ```
 
 ## Use git credentials in docker builds
