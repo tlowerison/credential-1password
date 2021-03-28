@@ -111,126 +111,57 @@ An example usage could be when you need to clone a private git repo or download 
 RUN --mount=type=secret,id=git-credentials git clone https://github.com/username/repo.git
 ```
 
-Paste the bash code below into your `~/.bash_profile`; it includes a `docker-build` function which accepts the same arguments as `docker build`, and two general helper functions `describe` and `try` :)
-
-Once you've re-run `source ~/.bash_profile`, you can try it out with `docker-build -t repo/image:tag .`
+Paste the code below into your `~/.bash_profile`, then run `source ~/.bash_profile` and you can try it out with `docker-build -t repo/image:tag .`
 
 ```sh
 export DOCKER_BUILDKIT=1
 
 # docker-build is a wrapper which will safely inject git credentials at build time using git-credential-1password
 docker-build() {
+  # docker secret id
   local git_credentials_id="git-credentials"
 
-  local usage="docker-build [...docker build args]"
-  local descr="Wraps docker build with automatic git credential mounting. Add \`RUN git config --global credential.helper 'store --file=/run/secrets/$git_credentials_id'\` to the top of your Dockerfile and prefix any commands in your Dockerfile that need access to git credentials with \`RUN --mount=type=secret,id=$git_credentials_id\`."
-  local exmpl="docker-build -t repo/image:tag ."
-  describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
-
-  if [[ "$@" == "" ]]; then describefn; return 1; fi
-
+  # docker secret src file path
   local git_credentials_src="git-credentials"
 
+  # get git-credentials and store them in a temporary file
   printf $'protocol=https\nhost=github.com\n' | git-credential-1password get > $git_credentials_src
 
-  key() {
-    echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//")
-  }
+  # retrieves a key from the temporary file
+  gitcredkey() { echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//"); }
 
-  local protocol=$(key protocol)
-  local username=$(key username)
-  local password=$(key password)
-  local host=$(key host)
-  local path=$(key path)
+  local protocol=$(gitcredkey protocol)
+  local username=$(gitcredkey username)
+  local password=$(gitcredkey password)
+  local host=$(gitcredkey host)
+  local path=$(gitcredkey path)
 
+  # path does not include an initial / by default
   if [[ "$path" != "" ]]; then local path="/$path"; fi
 
+  # reformat the credentials in the temporary file to use the url format expected by credential.helper store
   echo "$protocol://$username:$password@$host$path" > $git_credentials_src
 
-  local cmd="docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
-  try "$cmd" "rm $git_credentials_src"
-}
+  # try clause: build docker image
+  local try="docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
 
-# describe prints a formatted usage/example/description for a command
-describe() {
-  local cmd_usage="describe [--usage|-u USAGE] [--descr|-d DESCR] [--exmpl|-e EXMPL]"
-  local cmd_descr="Format a cli's details by providing usage, description and/or example messages."
-  local cmd_exmpl="describe --usage \"foo <whaaa>\" --descr \"Complains if whaaa doesn't equal \"bar\". --exmpl \"foo baz\""
+  # finally clause: remove git-credentials file
+  local finally="rm $git_credentials_src"
 
-  local usage=""
-  local descr=""
-  local exmpl=""
-
-  while [[ $1 != "" ]]; do
-    case $1 in
-      --usage|-u) shift; local usage="$1"; shift;;
-      --descr|-d) shift; local descr="$1"; shift;;
-      --exmpl|-e) shift; local exmpl="$1"; shift;;
-      *)          echo "Unknown flag $1." >&2; describe; return 1;;
-    esac
-  done
-
-  local cols=$(tput cols)
-  if [[ $usage == "" && $descr == "" && $exmpl == "" ]]; then
-    describe --usage "$cmd_usage" --descr "$cmd_descr" --exmpl "$cmd_exmpl"
-    return 0
-  fi
-
-  echo ""
-  if [[ $usage != "" ]]; then
-    fmt_usage=$(echo "         $usage" | fmt -w `expr $cols - 2`)
-    echo "  Usage: ${fmt_usage:2}"
-  fi
-  if [[ $exmpl != "" ]]; then
-    fmt_exmpl=$(echo "         $exmpl" | fmt -w `expr $cols - 2`)
-    echo "  Exmpl: ${fmt_exmpl:2}"
-  fi
-  if [[ $descr != "" ]]; then
-    fmt_descr=$(echo "         $descr" | fmt -w `expr $cols - 2`)
-    echo "  Descr: ${fmt_descr:2}"
-  fi
-  echo ""
-}
-
-# try executes the first positional arg as a command and guarantees that the second
-# positional arg will be called after the program stops, whether on return or interruption.
-try() {
-  local usage="try <command> <finally> [--verbose|-v]"
-  local descr="Tries to run command, and guarantees running finally after return/termination/interruption."
-  local exmpl="try 'cd ~ && echo \$PWD && sleep 3 && return 1' 'cd ~/Desktop && echo \$PWD'"
-  describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
-
-  local command="$1"; shift
-  local finally="$1"; shift
-  if [[ $command == "" || "$finally" == "" ]]; then describefn; return 1; fi
-
-  local verbose=0
-  while [[ $1 != "" ]]; do
-    case $1 in
-      --verbose|-v) shift; local verbose=1;;
-      *)            echo "Unknown flag $1." >&2; return 1;;
-    esac
-  done
-
-  # Capture interruption signals produced while running
-  # cmd so that we can run cleanup before ending
+  # capture interruption and return signals produced
+  # in the try clause so we can run cleanup at the end
   trap "trap - RETURN; cleanup" RETURN
 
-  # Cleanup - cd to original directory and clear trap
+  # executes finally clause and unsets extdebug
   cleanup() {
-    eval $finally
-    trap - SIGINT
     shopt -u extdebug
+    eval $finally
   }
 
-  # Echo command if verbose is set
-  if [[ $verbose == 1 ]]; then echo $command; fi
-
-  # Capture command's return code
+  # set extdebug enables us to trap return signals
   shopt -s extdebug
-  eval $command; rc=$?
 
-  # Return command's return code
-  return `expr $rc + 0`
+  # execute try clause
+  eval $try
 }
 ```
