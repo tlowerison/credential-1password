@@ -125,112 +125,112 @@ docker-build() {
   local usage="docker-build [...docker build args]"
   local descr="Wraps docker build with automatic git credential mounting. Add \`RUN git config --global credential.helper 'store --file=/run/secrets/$git_credentials_id'\` to the top of your Dockerfile and prefix any commands in your Dockerfile that need access to git credentials with \`RUN --mount=type=secret,id=$git_credentials_id\`."
   local exmpl="docker-build -t repo/image:tag ."
-	describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
+  describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
 
-	if [[ "$@" == "" ]]; then describefn; return 1; fi
+  if [[ "$@" == "" ]]; then describefn; return 1; fi
 
-	local git_credentials_src="git-credentials"
+  local git_credentials_src="git-credentials"
 
-	printf $'protocol=https\nhost=github.com\n' | git-credential-1password get > $git_credentials_src
+  printf $'protocol=https\nhost=github.com\n' | git-credential-1password get > $git_credentials_src
 
-	key() {
-		echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//")
-	}
+  key() {
+    echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//")
+  }
 
-	local protocol=$(key protocol)
-	local username=$(key username)
-	local password=$(key password)
-	local host=$(key host)
-	local path=$(key path)
+  local protocol=$(key protocol)
+  local username=$(key username)
+  local password=$(key password)
+  local host=$(key host)
+  local path=$(key path)
 
-	if [[ "$path" != "" ]]; then local path="/$path"; fi
+  if [[ "$path" != "" ]]; then local path="/$path"; fi
 
-	echo "$protocol://$username:$password@$host$path" > $git_credentials_src
+  echo "$protocol://$username:$password@$host$path" > $git_credentials_src
 
-	local cmd="docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
-	try "$cmd" "rm $git_credentials_src"
+  local cmd="docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
+  try "$cmd" "rm $git_credentials_src"
 }
 
 # describe prints a formatted usage/example/description for a command
 describe() {
-	local cmd_usage="describe [--usage|-u USAGE] [--descr|-d DESCR] [--exmpl|-e EXMPL]"
-	local cmd_descr="Format a cli's details by providing usage, description and/or example messages."
-	local cmd_exmpl="describe --usage \"foo <whaaa>\" --descr \"Complains if whaaa doesn't equal \"bar\". --exmpl \"foo baz\""
+  local cmd_usage="describe [--usage|-u USAGE] [--descr|-d DESCR] [--exmpl|-e EXMPL]"
+  local cmd_descr="Format a cli's details by providing usage, description and/or example messages."
+  local cmd_exmpl="describe --usage \"foo <whaaa>\" --descr \"Complains if whaaa doesn't equal \"bar\". --exmpl \"foo baz\""
 
-	local usage=""
-	local descr=""
-	local exmpl=""
+  local usage=""
+  local descr=""
+  local exmpl=""
 
-	while [[ $1 != "" ]]; do
-		case $1 in
-			--usage|-u) shift; local usage="$1"; shift;;
-			--descr|-d) shift; local descr="$1"; shift;;
-			--exmpl|-e) shift; local exmpl="$1"; shift;;
-			*)          echo "Unknown flag $1." >&2; describe; return 1;;
-		esac
-	done
+  while [[ $1 != "" ]]; do
+    case $1 in
+      --usage|-u) shift; local usage="$1"; shift;;
+      --descr|-d) shift; local descr="$1"; shift;;
+      --exmpl|-e) shift; local exmpl="$1"; shift;;
+      *)          echo "Unknown flag $1." >&2; describe; return 1;;
+    esac
+  done
 
-	local cols=$(tput cols)
-	if [[ $usage == "" && $descr == "" && $exmpl == "" ]]; then
-		describe --usage "$cmd_usage" --descr "$cmd_descr" --exmpl "$cmd_exmpl"
-		return 0
-	fi
+  local cols=$(tput cols)
+  if [[ $usage == "" && $descr == "" && $exmpl == "" ]]; then
+    describe --usage "$cmd_usage" --descr "$cmd_descr" --exmpl "$cmd_exmpl"
+    return 0
+  fi
 
-	echo ""
-	if [[ $usage != "" ]]; then
-		fmt_usage=$(echo "         $usage" | fmt -w `expr $cols - 2`)
-		echo "  Usage: ${fmt_usage:2}"
-	fi
-	if [[ $exmpl != "" ]]; then
-		fmt_exmpl=$(echo "         $exmpl" | fmt -w `expr $cols - 2`)
-		echo "  Exmpl: ${fmt_exmpl:2}"
-	fi
-	if [[ $descr != "" ]]; then
-		fmt_descr=$(echo "         $descr" | fmt -w `expr $cols - 2`)
-		echo "  Descr: ${fmt_descr:2}"
-	fi
-	echo ""
+  echo ""
+  if [[ $usage != "" ]]; then
+    fmt_usage=$(echo "         $usage" | fmt -w `expr $cols - 2`)
+    echo "  Usage: ${fmt_usage:2}"
+  fi
+  if [[ $exmpl != "" ]]; then
+    fmt_exmpl=$(echo "         $exmpl" | fmt -w `expr $cols - 2`)
+    echo "  Exmpl: ${fmt_exmpl:2}"
+  fi
+  if [[ $descr != "" ]]; then
+    fmt_descr=$(echo "         $descr" | fmt -w `expr $cols - 2`)
+    echo "  Descr: ${fmt_descr:2}"
+  fi
+  echo ""
 }
 
 # try executes the first positional arg as a command and guarantees that the second
 # positional arg will be called after the program stops, whether on return or interruption.
 try() {
-	local usage="try <command> <finally> [--verbose|-v]"
-	local descr="Tries to run command, and guarantees running finally after return/termination/interruption."
-	local exmpl="try 'cd ~ && echo \$PWD && sleep 3 && return 1' 'cd ~/Desktop && echo \$PWD'"
-	describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
+  local usage="try <command> <finally> [--verbose|-v]"
+  local descr="Tries to run command, and guarantees running finally after return/termination/interruption."
+  local exmpl="try 'cd ~ && echo \$PWD && sleep 3 && return 1' 'cd ~/Desktop && echo \$PWD'"
+  describefn() { describe --usage "$usage" --descr "$descr" --exmpl "$exmpl"; }
 
-	local command="$1"; shift
-	local finally="$1"; shift
-	if [[ $command == "" || "$finally" == "" ]]; then describefn; return 1; fi
+  local command="$1"; shift
+  local finally="$1"; shift
+  if [[ $command == "" || "$finally" == "" ]]; then describefn; return 1; fi
 
-	local verbose=0
-	while [[ $1 != "" ]]; do
-		case $1 in
-			--verbose|-v) shift; local verbose=1;;
-			*)            echo "Unknown flag $1." >&2; return 1;;
-		esac
-	done
+  local verbose=0
+  while [[ $1 != "" ]]; do
+    case $1 in
+      --verbose|-v) shift; local verbose=1;;
+      *)            echo "Unknown flag $1." >&2; return 1;;
+    esac
+  done
 
-	# Capture interruption signals produced while running
-	# cmd so that we can run cleanup before ending
-	trap "trap - RETURN; cleanup" RETURN
+  # Capture interruption signals produced while running
+  # cmd so that we can run cleanup before ending
+  trap "trap - RETURN; cleanup" RETURN
 
-	# Cleanup - cd to original directory and clear trap
-	cleanup() {
-		eval $finally
-		trap - SIGINT
-		shopt -u extdebug
-	}
+  # Cleanup - cd to original directory and clear trap
+  cleanup() {
+    eval $finally
+    trap - SIGINT
+    shopt -u extdebug
+  }
 
-	# Echo command if verbose is set
-	if [[ $verbose == 1 ]]; then echo $command; fi
+  # Echo command if verbose is set
+  if [[ $verbose == 1 ]]; then echo $command; fi
 
-	# Capture command's return code
-	shopt -s extdebug
-	eval $command; rc=$?
+  # Capture command's return code
+  shopt -s extdebug
+  eval $command; rc=$?
 
-	# Return command's return code
-	return `expr $rc + 0`
+  # Return command's return code
+  return `expr $rc + 0`
 }
 ```
