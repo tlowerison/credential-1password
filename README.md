@@ -44,7 +44,7 @@ printf $'protocol=https\nhost=github.com\n' | git-credential-1password get
 # > username=my-username
 # > password=my-password
 
-# finally, clone a private repo connected to the credentials you stored
+# clone a private repo
 git clone https://github.com/username/repo.git
 ```
 
@@ -83,7 +83,7 @@ docker login --username=<my-username>
 printf 'https://index.docker.io/v1/' | docker-credential-1password get
 # > {"ServerURL":"https://index.docker.io/v1/","Username":"my-username","Secret":"my-secret"}
 
-# finally, pull an image from your private registry
+# pull an image from your private registry
 docker pull repo/image:tag
 ```
 
