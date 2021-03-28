@@ -106,30 +106,29 @@ Then, for any commands which need git credentials to succeed, prefix the command
 RUN --mount=type=secret,id=git-credentials git clone https://github.com/username/repo.git
 ```
 
-Paste the code below into your `~/.bash_profile`, then run `source ~/.bash_profile` and you can try it out with `docker-build -t repo/image:tag .`
+Once your Dockerfile's all set, build with `docker-build -t repo/image:tag .`
+
+Paste the code below into your `~/.bash_profile`, then run `source ~/.bash_profile` to use `docker-build`.
 
 ```sh
-export DOCKER_BUILDKIT=1
-
-# docker-build is a wrapper which will safely inject git credentials at build time using git-credential-1password
 docker-build() {
   # docker secret id
   local git_credentials_id="git-credentials"
 
-  # docker secret src file path
+  # docker secret file path
   local git_credentials_src="git-credentials"
 
   # get git-credentials and store them in a temporary file
   printf $'protocol=https\nhost=github.com\n' | git-credential-1password get > $git_credentials_src
 
   # retrieves a key from the temporary file
-  gitcredkey() { echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//"); }
+  gitkey() { echo $(cat $git_credentials_src | grep "$1=" | sed "s/$1=//"); }
 
-  local protocol=$(gitcredkey protocol)
-  local username=$(gitcredkey username)
-  local password=$(gitcredkey password)
-  local host=$(gitcredkey host)
-  local path=$(gitcredkey path)
+  local protocol=$(gitkey protocol)
+  local username=$(gitkey username)
+  local password=$(gitkey password)
+  local host=$(gitkey host)
+  local path=$(gitkey path)
 
   # path does not include an initial / by default
   if [[ "$path" != "" ]]; then local path="/$path"; fi
@@ -138,7 +137,7 @@ docker-build() {
   echo "$protocol://$username:$password@$host$path" > $git_credentials_src
 
   # try clause: build docker image
-  local try="docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
+  local try="DOCKER_BUILDKIT=1 docker build --secret id=$git_credentials_id,src=$git_credentials_src $@"
 
   # finally clause: remove git-credentials file
   local finally="rm $git_credentials_src"
