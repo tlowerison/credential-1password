@@ -1,4 +1,3 @@
-///usr/bin/env go run "$0" "$@"; exit "$?"
 package main
 
 import (
@@ -73,37 +72,6 @@ func main() {
       fmt.Println(cmd.UsageString())
     },
   }
-
-  rootCmd.AddCommand(&cobra.Command{
-    Use:   "signin",
-    Short: "signin into op with stdin",
-    Long:  "signin into op with stdin; other commands will also prompt your master password but after processing stdin for credential related input",
-    Args:  cobra.ExactArgs(0),
-    Run: func(_ *cobra.Command, _ []string) {
-      handleErr(Signin())
-    },
-  })
-
-  sessionCmd := &cobra.Command{
-    Use:   "session",
-    Short: "get/set a session token",
-  }
-
-  sessionCmd.AddCommand(&cobra.Command{
-    Use: "get",
-    Short: "get the current session token, creates one if none exists",
-    Args:  cobra.ExactArgs(0),
-    Run:   asRun(SessionGet),
-  })
-
-  sessionCmd.AddCommand(&cobra.Command{
-    Use:   "set",
-    Short: "set a session token provided through stdin",
-    Args:  cobra.ExactArgs(0),
-    Run:   asRun(SessionSet),
-  })
-
-  rootCmd.AddCommand(sessionCmd)
 
   rootCmd.AddCommand(&cobra.Command{
     Use:   "vault",
@@ -275,45 +243,6 @@ func PreRunVaultUUID(shouldUpsert bool) error {
 }
 
 // --- commands ---
-
-func Signin() error {
-  token, err := CreateSessionToken()
-  if err != nil {
-    return err
-  }
-
-  sessionToken = token
-  viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
-  viper.Set(sessionTokenValueKey, sessionToken)
-  viper.WriteConfig()
-
-  return nil
-}
-
-func SessionGet() error {
-  err := PreRunSessionToken()
-  if err != nil {
-    return err
-  }
-  if sessionToken != "" {
-    fmt.Println(sessionToken)
-  }
-  return nil
-}
-
-func SessionSet() error {
-  reader := bufio.NewReader(os.Stdin)
-  line, err := reader.ReadString('\n')
-  if err != nil && err.Error() != "EOF" {
-    return err
-  }
-
-  sessionToken = strings.TrimSpace(line)
-  viper.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
-  viper.Set(sessionTokenValueKey, sessionToken)
-  viper.WriteConfig()
-  return nil
-}
 
 func Vault(args []string) error {
   if len(args) == 0 {
@@ -549,15 +478,10 @@ func ParseURL(cmd *cobra.Command) error {
   URL = &url.URL{}
   var rawurl string
 
-  scanner := bufio.NewScanner(os.Stdin)
-  lines := []string{}
-	for scanner.Scan() {
-    line := scanner.Text()
-    lines = append(lines, line)
-    if line == "" {
-      break
-    }
-    if mode == gitMode {
+  lines := ScanStdin()
+
+  if mode == gitMode {
+  	for _, line := range lines {
       if strings.HasPrefix(line, "protocol=") { URL.Scheme = strings.TrimPrefix(line, "protocol=") }
       if strings.HasPrefix(line, "username=") { username   = strings.TrimPrefix(line, "username=") }
       if strings.HasPrefix(line, "password=") { password   = strings.TrimPrefix(line, "password=") }
@@ -566,7 +490,6 @@ func ParseURL(cmd *cobra.Command) error {
       if strings.HasPrefix(line, "url=")      { rawurl     = strings.TrimPrefix(line, "url=") }
     }
   }
-  os.Stdin.Close()
 
   if mode == dockerMode {
     input := strings.Join(lines, "\n")
@@ -593,4 +516,20 @@ func ParseURL(cmd *cobra.Command) error {
 
   key = URL.String()
   return nil
+}
+
+// ScanStdin scans stdin until it reads two newlines or EOF,
+// closes os.Stdin and returns the scanned lines.
+func ScanStdin() []string {
+  scanner := bufio.NewScanner(os.Stdin)
+  defer os.Stdin.Close()
+  lines := []string{}
+	for scanner.Scan() {
+    line := scanner.Text()
+    lines = append(lines, line)
+    if line == "" {
+      break
+    }
+  }
+  return lines
 }
