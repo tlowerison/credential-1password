@@ -83,7 +83,7 @@ docker login --username=<my-username>
 printf 'https://index.docker.io/v1/' | docker-credential-1password get
 # > {"ServerURL":"https://index.docker.io/v1/","Username":"my-username","Secret":"my-secret"}
 
-# finally, pull a private image from your registry
+# finally, pull an image from your private registry
 docker pull repo/image:tag
 ```
 
