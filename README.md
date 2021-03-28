@@ -16,8 +16,7 @@ chmod u+x /usr/local/bin/git-credential-1password
 # reload PATH
 source ~/.bash_profile
 
-# unset existing credential.helper in any file (can be an issue when installed with brew, osxkeychain is set by default)
-# - you may need to run this more than once if multiple files have set credential.helper
+# unset existing credential.helper
 git config -f $(git config --show-origin --get credential.helper | sed 's/file://' | sed 's/\t.*//') --unset credential.helper
 
 # set as global credential store
