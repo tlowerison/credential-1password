@@ -1,6 +1,6 @@
 # credential-1password
 
-A credential helper which stores secrets in 1Password and interfaces seamlessly with both git and docker. 1Password issues session tokens which remain valid until unused for 30min -> development flows naturally since your master password is only requested for git / docker operations after periods of inactivity.
+A credential helper which stores secrets in 1Password and interfaces seamlessly with both git and docker. 1Password issues session tokens which remain valid until unused for 30min, so development flows naturally since your master password is only requested for git / docker operations after periods of inactivity.
 
 ## Install
 credential-1password relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
