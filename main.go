@@ -385,7 +385,7 @@ func UpsertVaultUUID() (string, error) {
     "create",
     "vault", vaultName,
     "--allow-admins-to-manage", "false",
-    "--description", fmt.Sprintf("'%s'", vaultDescription),
+    "--description", fmt.Sprintf("%s", vaultDescription),
   )
   if err != nil {
     return "", err
