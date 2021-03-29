@@ -8,7 +8,7 @@ credential-1password relies on 1Password's `op` CLI under the hood to manage cre
 ### Install for git
 ```sh
 # pull binary and store in /usr/local/bin
-wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.1/git-credential-1password -q -O /usr/local/bin/git-credential-1password
+wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.2/git-credential-1password -q -O /usr/local/bin/git-credential-1password
 
 # give executable permission
 chmod u+x /usr/local/bin/git-credential-1password
@@ -55,7 +55,7 @@ Update your docker version to at least `20.10.4`, there was a bug fix included t
 docker logout
 
 # pull binary and store in /usr/local/bin
-wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.1/docker-credential-1password -q -O /usr/local/bin/docker-credential-1password
+wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.2/docker-credential-1password -q -O /usr/local/bin/docker-credential-1password
 
 # give executable permission
 chmod u+x /usr/local/bin/docker-credential-1password
