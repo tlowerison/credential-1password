@@ -3,17 +3,25 @@
 A credential helper which stores secrets in 1Password and interfaces seamlessly with both git and docker. 1Password issues session tokens which remain valid until unused for 30min, so development flows naturally since your master password is only requested for git / docker operations after periods of inactivity.
 
 ## Install
+### Base installation
 credential-1password relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
+
+```sh
+# pull binary and store in /usr/local/bin
+wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.3/credential-1password -q -O /usr/local/bin/credential-1password
+
+# give executable permission
+chmod u+x /usr/local/bin/credential-1password
+
+# reload PATH
+source ~/.bash_profile
+```
 
 ### Install for git
 ```sh
-# pull binary and store in /usr/local/bin
-wget https://github.com/tlowerison/credential-1password/releases/download/v1.0.2/git-credential-1password -q -O /usr/local/bin/git-credential-1password
-
-# give executable permission
+# create git-credential-1password from existing credential-1password binary
+printf $'#!/bin/sh\ncredential-1password --mode=git $@\n' > /usr/local/bin/git-credential-1password
 chmod u+x /usr/local/bin/git-credential-1password
-
-# reload PATH
 source ~/.bash_profile
 
 # unset existing credential.helper
@@ -51,6 +59,11 @@ git clone https://github.com/username/repo.git
 ### Install for Docker
 Update your docker version to at least `20.10.4`, there was a bug fix included that fixed docker from segfaulting when using custom credential helpers ([relevant pr](https://github.com/docker/cli/pull/2959)).
 ```sh
+# create docker-credential-1password from existing credential-1password binary
+printf $'#!/bin/sh\ncredential-1password --mode=docker $@\n' > /usr/local/bin/docker-credential-1password
+chmod u+x /usr/local/bin/docker-credential-1password
+source ~/.bash_profile
+
 # logout of docker to remove old credentials
 docker logout
 
@@ -87,38 +100,51 @@ printf 'https://index.docker.io/v1/' | docker-credential-1password get
 docker pull repo/image:tag
 ```
 
-## Use git credentials in docker builds
+### Install for npm
+```sh
+# create npm-credential-1password from existing credential-1password binary
+printf $'#!/bin/sh\ncredential-1password --mode=npm $@\n' > /usr/local/bin/npm-credential-1password
+chmod u+x /usr/local/bin/npm-credential-1password
+source ~/.bash_profile
 
-Combining `git-credential-1password` and [Docker BuildKit secrets](https://docs.docker.com/develop/develop-images/build_enhancements/#new-docker-build-secret-information) allows us to safely inject git credentials into containers at build time.
-
-The idea is to wrap `docker build` with an alias `docker-build` which will:
-- pull your git credentials with `git-credential-1password get`
-- format those credentials into url format for use with the basic `store` git credential helper in our Dockerfile
-- call `docker build` with (a) all the same arguments provided to `docker-build` and (b) our git credentials
-
-In order to use the pulled git credentials, set the git credential helper at the start of your Dockerfile to look for the mounted credentials:
-```docker
-RUN git config --global credential.helper 'store --file=/run/secrets/git-credentials'
+npm-credential-1password store
+# > registry=https://registry.npmjs.org/
+# > email=my-email
+# > _auth=my-api-key
 ```
 
-Then, for any commands which need git credentials to succeed, prefix the command with a secret mount like so:
+## Use credentials in docker builds
+
+Combining `credential-1password` and [Docker BuildKit secrets](https://docs.docker.com/develop/develop-images/build_enhancements/#new-docker-build-secret-information) allows us to safely inject credentials into containers at build time.
+
+The idea is to add a `docker build` hook which will:
+- pull your credentials with `credential-1password --mode=$mode get`
+- format those credentials into url format for use with the basic `store` credential helper in your Dockerfile
+- call `docker build` with (a) your credentials and (b) all the same arguments provided to `docker build`
+
+In order to use pulled git credentials, set the credential helper at the start of your Dockerfile to look for the mounted credentials:
+```docker
+RUN git config --global credential.helper 'store --file=/run/secrets/$mode-credentials'
+```
+
+Then, for any commands which need credentials to succeed, prefix the command with a secret mount like so:
 ```docker
 RUN --mount=type=secret,id=git-credentials git clone https://github.com/username/repo.git
+```
+or
+```docker
+RUN --mount=type=secret,id=npm-credentials,dst=/path/to/workdir/.npmrc yarn add
 ```
 
 Once your Dockerfile's all set, build with `docker-build -t repo/image:tag .`
 
-Paste the code below into your `~/.bash_profile`, then run `source ~/.bash_profile` to use `docker-build`.
+Paste the code below into your `~/.bash_profile`, then run `source ~/.bash_profile` to use `add-docker-build-hook`.
 
 ```sh
-docker-build() {
-  # docker secret id
+add-docker-build-hook() {
   local git_credentials_id="git-credentials"
-
-  # docker secret file path
   local git_credentials_src="git-credentials"
-
-  # get git-credentials and store them in a temporary file
+  # get credentials and store them in a temporary file
   printf $'protocol=https\nhost=github.com\n' | git-credential-1password get > $git_credentials_src
 
   # retrieves a key from the temporary file
