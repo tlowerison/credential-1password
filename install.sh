@@ -33,7 +33,7 @@ for mode in $@; do
   echo "#!/bin/sh" > $src
   echo "credential-1password \$@ --mode=$mode" >> $src
   # make executable
-  chmod 700 $src
+  chmod u+x $src
 
   case $mode in
     git)

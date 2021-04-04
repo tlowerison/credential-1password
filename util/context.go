@@ -46,6 +46,9 @@ var PredefinedModes = []string{
   string(GitMode),
 }
 
+const DockerBuildCredentialsTreeSearchKey = "docker-build.credentials-tree-search"
+const VaultKey = "vault"
+
 func (m Mode) IsPredefined() bool {
   switch m {
   case DockerMode: break
@@ -62,8 +65,8 @@ func (m Mode) Valid() bool {
 const sessionTokenDateKey = "session-token.date"
 const sessionTokenValueKey = "session-token.value"
 
-const vaultNameKey = "vault.name"
-const vaultUUIDKey = "vault.uuid"
+var vaultNameKey = fmt.Sprintf("%s.name", VaultKey)
+var vaultUUIDKey = fmt.Sprintf("%s.uuid", VaultKey)
 const vaultDescription = "Contains credentials managed by %s."
 const vaultNameDefault = "credential-1password"
 
@@ -71,6 +74,10 @@ const dockerServerURLKey = "ServerURL"
 const timeFormat = time.UnixDate
 
 const missingVaultErrMsg = "doesn't seem to be a vault in this account"
+
+const stdinHelperInfo = "type your credentials into stdin..."
+const stdinHelperInfoTimeout = 10 * time.Second
+const stdinTimeout = 30 * time.Second
 
 // Register
 func Register(name string) (*Context, error) {
@@ -87,6 +94,7 @@ func Register(name string) (*Context, error) {
   viper.SetConfigType("yaml")
 
   viper.SetDefault(vaultNameKey, vaultNameDefault)
+  viper.SetDefault(DockerBuildCredentialsTreeSearchKey, "false")
 
   _ = viper.SafeWriteConfig()
   err = viper.ReadInConfig()
@@ -112,6 +120,11 @@ func (ctx *Context) GetCmd() *cobra.Command {
 // GetConfigPath
 func (ctx *Context) GetConfigPath() string {
   return ctx.configPath
+}
+
+// GetDockerBuildCredentialsTreeSearch
+func (ctx *Context) GetDockerBuildCredentialsTreeSearch() bool {
+  return viper.GetBool(DockerBuildCredentialsTreeSearchKey)
 }
 
 // GetHomeDir
@@ -194,7 +207,7 @@ func (ctx *Context) GetVaultName() string {
 // ReadInput scans from stdin and splits each line by "=" to find key/value pairs.
 // Any line which does not contain "=" is skipped over. Tries to store the inputs in the provided map,
 // but if it's nil, will create a new map and fill that; returns the filled inputs map.
-func (ctx *Context) ReadInput() error {
+func (ctx *Context) ReadInput() (err error) {
   if ctx.cmd == nil {
     return fmt.Errorf("unable to read inputs in the correct format without knowledge of the current command")
   }
@@ -203,7 +216,10 @@ func (ctx *Context) ReadInput() error {
   if !ctx.GetMode().IsPredefined() && ctx.GetCmd().Use != "store" {
     lines = []string{}
   } else {
-    lines = scanStdinLines()
+    lines, err = scanStdinLines()
+    if err != nil {
+      return err
+    }
   }
   ctx.input = strings.Join(lines, "\n") + "\n"
 
@@ -226,6 +242,13 @@ func (ctx *Context) ReadInput() error {
 // SetCmd
 func (ctx *Context) SetCmd(cmd *cobra.Command) {
   ctx.cmd = cmd
+}
+
+// SetDockerBuildCredentialsTreeSearch
+func (ctx *Context) SetDockerBuildCredentialsTreeSearch(dockerBuildCredentialsTreeSearch bool) error {
+  viper.Set(DockerBuildCredentialsTreeSearchKey, dockerBuildCredentialsTreeSearch)
+  viper.WriteConfig()
+  return nil
 }
 
 // SetVaultName
@@ -297,18 +320,39 @@ func isValidGenericMode(mode string) bool {
 
 // scanStdinLines scans stdin until it reads two newlines or EOF,
 // closes os.Stdin and returns the scanned lines.
-func scanStdinLines() []string {
+func scanStdinLines() ([]string, error) {
   scanner := bufio.NewScanner(os.Stdin)
   defer os.Stdin.Close()
-  lines := []string{}
-	for scanner.Scan() {
-    line := scanner.Text()
-    lines = append(lines, line)
-    if line == "" {
-      break
+
+  c := make(chan []string, 1)
+  go func() {
+    hasReadSomething := false
+    go func() {
+      time.Sleep(stdinHelperInfoTimeout)
+      if !hasReadSomething {
+        fmt.Println(stdinHelperInfo)
+      }
+    }()
+
+    lines := []string{}
+    for scanner.Scan() {
+      line := scanner.Text()
+      lines = append(lines, line)
+      hasReadSomething = true
+      if line == "" {
+        break
+      }
     }
+
+    c <- lines
+  }()
+
+  select {
+  case lines := <- c:
+    return lines, nil
+  case <-time.After(stdinTimeout):
+    return nil, fmt.Errorf("closed stdin after waiting %v", stdinTimeout)
   }
-  return lines
 }
 
 // scrubURL removes the User and Password fields from the provided url

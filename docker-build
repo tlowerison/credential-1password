@@ -3,23 +3,31 @@
 # config dir
 configdir=$HOME/.credential-1password
 
-# read in project credential keys
-repocredentials=$PWD/.credentials
-defaultcredentials=$configdir/credentials
+# read in project credentials config
+filename=".credentials"
+
+credentials_tree_search=$(cat $configdir/config.yaml | grep "  credentials-tree-search:" | sed 's/.*: //')
 
 conf=""
-if [[ -e $repocredentials ]]; then
-  conf=$(cat $repocredentials)
-elif [[ -e $defaultcredentials ]]; then
-  conf=$(cat $defaultcredentials)
+if [[ $credentials_tree_search == "true" ]]; then
+  dir=$PWD
+  while [[ ! -e "$dir/$filename" && "$dir" != "$HOME"  ]]; do
+    dir=$(dirname "$dir")
+  done
+  if [[ -e "$dir/$filename" ]]; then
+    conf=$(cat "$dir/$filename")
+  fi
+elif [[ -e $PWD/$filename ]]; then
+  conf=$(cat $PWD/$filename)
+fi
+
+if [[ $conf == "" && -e $configdir/$filename ]]; then
+  conf=$(cat $configdir/$filename)
 fi
 
 if [[ $conf == "" ]]; then
   echo "  "
-  echo "  no 1password credentials file found at:" 1>&2
-  echo "  - $repocredentials" 1>&2
-  echo "  - $defaultcredentials" 1>&2
-  echo "  "
+  echo "  no 1password credentials file found"
   echo "  credentials file should be formatted like:"
   echo "  git"
   echo "  credentials passed to git-credential-1password get"
@@ -50,16 +58,18 @@ secrets=""
 for credential in ${result[@]}; do
   mode=$(printf $credential | head -n 1)
   keys=$(printf $credential | sed 1d)
-  cmd="credential-1password --mode=$mode"
-  if [[ "$(which $cmd)" != "" ]]; then
-    credentials=$(printf $keys | $cmd get)
-    rv=$?
-    if [[ "$rv" != "0" ]]; then
-      exit $?
-    fi
-    secrets+="--secret id=$mode-credentials,src=<(printf \$'$credentials') "
+  credentials=""
+  if [[ "$keys" == "" ]]; then
+    credentials=$(credential-1password get --mode=$mode)
+  else
+    credentials=$(printf $keys | credential-1password get --mode=$mode)
   fi
+  rv=$?
+  if [[ "$rv" != "0" ]]; then
+    exit $?
+  fi
+  secrets+="--secret=id=$mode-credentials,src=<(printf \$'$credentials') "
 done
 
 # build docker image with secrets
-DOCKER_BUILDKIT=1 docker build $secrets $@
+eval "DOCKER_BUILDKIT=1 docker build $secrets $@"

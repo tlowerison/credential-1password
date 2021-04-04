@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "strings"
 
   "github.com/spf13/cobra"
   "github.com/tlowerison/credential-1password/util"
@@ -18,13 +19,6 @@ func main() {
     Run: func(cmd *cobra.Command, _ []string) {
       fmt.Println(cmd.UsageString())
     },
-  }
-
-  vaultCmd := &cobra.Command{
-    Use:   "vault",
-    Short: "get/set the vault that credential uses",
-    Args:  cobra.RangeArgs(0, 1),
-    Run:   util.RunWithArgs(ctx, Vault),
   }
 
   getCmd := &cobra.Command{
@@ -48,10 +42,17 @@ func main() {
     Run:    util.Run(ctx, Erase),
   }
 
-  rootCmd.PersistentFlags().StringVarP(&ctx.ModeFlag, "mode", "m", "", "credential mode - predefined modes include {git,docker}; other modes can be used for basic file storage")
-  vaultCmd.Flags().BoolVarP(&ctx.ShouldCreateVault, "create", "c", false, "If setting the vault name and no vault exists with that name, will create a new vault.")
+  configCmd := &cobra.Command{
+    Use: "config",
+    Short: fmt.Sprintf("get/set credential-1password configurations - {%s}", strings.Join(ConfigKeys, ",")),
+    Args: cobra.RangeArgs(1, 2),
+    Run:  util.RunWithArgs(ctx, Config),
+  }
 
-  rootCmd.AddCommand(vaultCmd)
+  rootCmd.PersistentFlags().StringVarP(&ctx.ModeFlag, "mode", "m", "", "credential mode - predefined modes include {git,docker}; other modes can be used for basic file storage")
+  configCmd.Flags().BoolVarP(&ctx.ShouldCreateVault, "create", "c", false, "If setting the vault, and no vault exists with that name, will create a new vault.")
+
+  rootCmd.AddCommand(configCmd)
   rootCmd.AddCommand(getCmd)
   rootCmd.AddCommand(storeCmd)
   rootCmd.AddCommand(eraseCmd)
