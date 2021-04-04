@@ -2,100 +2,154 @@ package op
 
 import (
   "fmt"
+  "io"
   "os"
   "os/exec"
   "regexp"
   "strings"
-
-  "github.com/tidwall/gjson"
 )
+
+type Context struct {
+  SessionToken string
+  VaultUUID    string
+}
+
+type Query struct {
+  Context
+  Key string // can be a title, uuid, etc.
+}
+
+type DocumentUpsert struct {
+  Query
+  Content  string
+  FileName string
+  Title    string
+}
+
+type CreateVaultMutation struct {
+  Description  string
+  SessionToken string
+  Title        string
+}
 
 var retryRegexp = regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} You are not currently signed in. Please run `op signin --help` for instructions")
 
 // op wraps 1Password's cli tool op.
-func op(sessionToken string, args ...string) (string, error) {
-  newArgs := args
-  if sessionToken != "" {
-    newArgs = append(newArgs, "--session", sessionToken)
-  }
+func op(stdin string, args []string) (string, error) {
+  cmd := exec.Command("op", args...)
 
-  cmd := exec.Command("op", newArgs...)
-  cmd.Stdin = os.Stdin
-  cmd.Stderr = os.Stderr
-  outputBytes, err := cmd.Output()
-  return string(outputBytes), err
-}
-
-// Get wraps op get and hides stderr
-func Get(sessionToken string, silent bool, args ...string) (string, error) {
-  newArgs := args
-  if sessionToken != "" {
-    newArgs = append(newArgs, "--session", sessionToken)
-  }
-
-  cmd := exec.Command("op", append([]string{"get"}, newArgs...)...)
-  cmd.Stdin = os.Stdin
-
-  outBytes, _ := cmd.CombinedOutput()
-  out := strings.TrimSpace(string(outBytes))
-
-  if !silent && strings.Contains(out, "doesn't seem to be a vault in this account") {
-    return "", fmt.Errorf(out)
-  }
-  if strings.HasPrefix(out, "[ERROR]") {
-    err := fmt.Errorf(out)
-    if ShouldClearSessionAndRetry(err) {
+  if stdin == "" {
+    cmd.Stdin = os.Stdin
+  } else {
+    stdinPipe, err := cmd.StdinPipe()
+    if err != nil {
       return "", err
-    } else {
-      return "", nil
     }
+
+    go func() {
+      defer stdinPipe.Close()
+      io.WriteString(stdinPipe, stdin)
+    }()
   }
-  return out, nil
+
+  outBytes, err := cmd.CombinedOutput()
+  output := string(outBytes)
+
+  // err always has message "exit status 1"
+  // actual error message captured in stdout
+  if err != nil {
+    if strings.HasPrefix(output, "[ERROR]") {
+      return "", fmt.Errorf(output)
+    }
+    return "", err
+  }
+
+  return strings.TrimSpace(string(outBytes)), nil
 }
 
-// CreateLogin creates a new 1Passord login and returns
-// the newly created login's uuid on success.
-func CreateLogin(sessionToken string, args ...string) (string, error) {
-  return op(sessionToken, append([]string{"create", "item", "Login"}, args...)...)
+// GetDocument wraps "op get document" and captures stdout/stderr
+func GetVault(input Query) (string, error) {
+  return op("", []string{
+    "get", "vault", input.Key,
+    "--session", input.SessionToken,
+  })
 }
 
 // CreateVault creates a new 1Passord vault and returns
 // the newly created vault's uuid on success.
-func CreateVault(sessionToken string, name string, description string) (string, error) {
-  output, err := op(
-    sessionToken,
-    "create",
-    "vault", name,
+func CreateVault(input CreateVaultMutation) (string, error) {
+  return op("", []string{
+    "create", "vault", input.Title,
+    "--session", input.SessionToken,
     "--allow-admins-to-manage", "false",
-    "--description", description,
-  )
-  if err != nil {
-    return "", err
+    "--description", input.Description,
+  })
+}
+
+// GetItem wraps "op get item" and captures stdout/stderr
+func GetItem(input Query) (string, error) {
+  return op("", []string{
+    "get", "item", input.Key,
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+  })
+}
+
+// GetDocument wraps "op get document" and captures stdout/stderr
+func GetDocument(input Query) (string, error) {
+  return op("", []string{
+    "get", "document", input.Key,
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+  })
+}
+
+// CreateDocument creates a new 1Passord document
+// and returns the created login's uuid on success.
+func CreateDocument(input DocumentUpsert) (string, error) {
+  return op(input.Content, []string{
+    "create", "document", "-",
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+    "--title", input.Title,
+    "--file-name", input.FileName,
+  })
+}
+
+// EditDocument edits a 1Passord document by uuid, name, etc.
+// and returns the edited login's uuid on success.
+func EditDocument(input DocumentUpsert) (string, error) {
+  args := []string{
+    "edit", "document", input.Key, "-",
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
   }
 
-  vaultUUID := gjson.Get(output, "uuid").String()
-  return vaultUUID, nil
+  if input.FileName != "" {
+    args = append(args, "--file-name", input.FileName)
+  }
+
+  if input.Title != "" {
+    args = append(args, "--title", input.Title)
+  }
+
+  return op(input.Content, args)
+}
+
+// DeleteDocument deletes any document by uuid, name, etc.
+func DeleteDocument(input Query) error {
+  _, err := op("", []string{
+    "delete", "document", input.Key,
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+  })
+  return err
 }
 
 // Signin requests the user to sign into 1Password through
 // stdin, then returns the provided session token.
 func Signin() (string, error) {
-  output, err := op("", "signin", "--raw")
-  if err != nil {
-    return "", err
-  }
-
-  return strings.TrimSpace(output), nil
-}
-
-// EditItem edits an item, referenced by its uuid.
-func EditItem(sessionToken string, uuid string, args ...string) (string, error) {
-  return op(sessionToken, append([]string{"edit", "item", uuid}, args...)...)
-}
-
-// DeleteItem deletes any item by uuid, name, etc.
-func DeleteItem(sessionToken string, args ...string) (string, error) {
-  return op(sessionToken, append([]string{"delete", "item"}, args...)...)
+  return op("", []string{"signin", "--raw"})
 }
 
 // ShouldClearSessionAndRetry

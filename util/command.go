@@ -13,7 +13,7 @@ type Runnable func(cmd *cobra.Command, args []string)
 // PreRunWithInput wraps preRun with a session retry
 func PreRunWithInput(ctx *Context) Runnable {
   return func(cmd *cobra.Command, args []string) {
-    WithSessionRetry(ctx, cmd, args, func(ctx *Context) error { return ctx.ReadInputs() })
+    WithSessionRetry(ctx, cmd, args, func(ctx *Context) error { return ctx.ReadInput() })
   }
 }
 

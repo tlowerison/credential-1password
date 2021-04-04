@@ -11,7 +11,8 @@ func main() {
   ctx, err := util.Register("credential-1password")
   util.HandleErr(err)
 
-  rootCmd := &cobra.Command{
+  var rootCmd *cobra.Command
+  rootCmd = &cobra.Command{
     Use:   ctx.GetName(),
     Short: "credential helper for 1Password",
     Run: func(cmd *cobra.Command, _ []string) {
@@ -47,7 +48,7 @@ func main() {
     Run:    util.Run(ctx, Erase),
   }
 
-  rootCmd.PersistentFlags().StringVarP(&ctx.Mode, "mode", "m", "", "{git,docker,npm} - expected credential mode")
+  rootCmd.PersistentFlags().StringVarP(&ctx.ModeFlag, "mode", "m", "", "credential mode - predefined modes include {git,docker}; other modes can be used for basic file storage")
   vaultCmd.Flags().BoolVarP(&ctx.ShouldCreateVault, "create", "c", false, "If setting the vault name and no vault exists with that name, will create a new vault.")
 
   rootCmd.AddCommand(vaultCmd)

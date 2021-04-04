@@ -19,28 +19,45 @@ import (
 type Mode string
 
 type Context struct {
-  Mode              string
+  ModeFlag          string
   ShouldCreateVault bool
   cmd               *cobra.Command
   configPath        string
   homeDir           string
-  key               string
+  input             string
   inputs            map[string]string
+  key               string
   mode              Mode
   name              string
+  opCtx             *op.Context
   password          string
-  sessionToken      string
   username          string
   vaultName         string
   vaultNameDefault  string
-  vaultUUID         string
 }
 
 const (
-  GitMode    Mode = "git"
   DockerMode Mode = "docker"
-  NPMMode    Mode = "npm"
+  GitMode    Mode = "git"
 )
+
+var PredefinedModes = []string{
+  string(DockerMode),
+  string(GitMode),
+}
+
+func (m Mode) IsPredefined() bool {
+  switch m {
+  case DockerMode: break
+  case GitMode: break
+  default: return false
+  }
+  return true
+}
+
+func (m Mode) Valid() bool {
+  return m.IsPredefined() || isValidGenericMode(string(m))
+}
 
 const sessionTokenDateKey = "session-token.date"
 const sessionTokenValueKey = "session-token.value"
@@ -52,6 +69,8 @@ const vaultNameDefault = "credential-1password"
 
 const dockerServerURLKey = "ServerURL"
 const timeFormat = time.UnixDate
+
+const missingVaultErrMsg = "doesn't seem to be a vault in this account"
 
 // Register
 func Register(name string) (*Context, error) {
@@ -78,7 +97,9 @@ func Register(name string) (*Context, error) {
   return &Context{
     configPath:       configPath,
     homeDir:          homeDir,
+    inputs:           map[string]string{},
     name:             name,
+    opCtx:            &op.Context{},
     vaultNameDefault: vaultNameDefault,
   }, nil
 }
@@ -86,11 +107,6 @@ func Register(name string) (*Context, error) {
 // GetCmd
 func (ctx *Context) GetCmd() *cobra.Command {
   return ctx.cmd
-}
-
-// SetCmd
-func (ctx *Context) SetCmd(cmd *cobra.Command) {
-  ctx.cmd = cmd
 }
 
 // GetConfigPath
@@ -103,43 +119,9 @@ func (ctx *Context) GetHomeDir() string {
   return ctx.homeDir
 }
 
-// GetInputs
-func (ctx *Context) GetInputs() map[string]string {
-  if ctx.inputs == nil {
-    ctx.inputs = map[string]string{}
-  }
-  return ctx.inputs
-}
-
-// ReadInput scans from stdin and splits each line by "=" to find key/value pairs.
-// Any line which does not contain "=" is skipped over. Tries to store the inputs in the provided map,
-// but if it's nil, will create a new map and fill that; returns the filled inputs map.
-func (ctx *Context) ReadInputs() error {
-  if ctx.cmd == nil {
-    return fmt.Errorf("unable to read inputs in the correct format without knowledge of the current command")
-  }
-
-  if ctx.inputs == nil {
-    ctx.inputs = map[string]string{}
-  }
-
-  lines := scanStdinLines()
-  mode := ctx.GetMode()
-
-  switch mode {
-  case GitMode:
-    return ctx.readKeyValueInputs(lines)
-  case DockerMode:
-    if ctx.cmd.Use == "store" {
-      return ctx.readJSONInputs(lines)
-    } else {
-      return ctx.readServerURLInput(lines)
-    }
-  case NPMMode:
-    return ctx.readKeyValueInputs(lines)
-  default:
-    return fmt.Errorf("could not read inputs for unknown mode %s", ctx.Mode)
-  }
+// GetInput
+func (ctx *Context) GetInput() string {
+  return ctx.input
 }
 
 // GetKey
@@ -148,81 +130,54 @@ func (ctx *Context) GetKey() (string, error) {
     return ctx.key, nil
   }
 
-  if ctx.inputs == nil {
-    return "", fmt.Errorf("no inputs have been read")
+  if ctx.input == "" {
+    return "", fmt.Errorf("no input has been read")
   }
 
-  mode := ctx.GetMode()
-
-  switch mode {
-  case GitMode:
-    return ctx.getGitKey()
-  case DockerMode:
-    return ctx.getDockerKey()
-  case NPMMode:
-    return ctx.getNPMKey()
-  default:
-    return "", fmt.Errorf("unknown mode %s", ctx.Mode)
+  modeKey, err := ctx.getModeKey()
+  if err != nil {
+    return "", err
   }
+  if !ctx.GetMode().IsPredefined() {
+    return modeKey, nil
+  }
+  return fmt.Sprintf("%s:%s", string(ctx.GetMode()), modeKey), nil
 }
 
 // GetMode
 func (ctx *Context) GetMode() Mode {
-  ctx.mode = Mode(ctx.Mode)
+  if string(ctx.mode) != "" {
+    return ctx.mode
+  }
+  mode := Mode(ctx.ModeFlag)
+  if mode.Valid() {
+    ctx.mode = mode
+  }
   return ctx.mode
 }
 
 // GetName
 func (ctx *Context) GetName() string {
+  mode := ctx.GetMode()
+  if mode.IsPredefined() {
+    return fmt.Sprintf("%s-%s", string(mode), ctx.name)
+  }
   return ctx.name
 }
 
-// GetPassword
-func (ctx *Context) GetPassword() (string, error) {
-  if ctx.password != "" {
-    return ctx.key, nil
+// GetOpQuery
+func (ctx *Context) GetOpQuery() (*op.Query, error) {
+  key, err := ctx.GetKey()
+  if err != nil {
+    return nil, err
   }
 
-  if ctx.inputs == nil {
-    return "", fmt.Errorf("no inputs have been read")
+  opCtx, err := ctx.getOpCtx()
+  if err != nil {
+    return nil, err
   }
 
-  mode := ctx.GetMode()
-
-  switch mode {
-  case GitMode:
-    return ctx.getGitPassword()
-  case DockerMode:
-    return ctx.getDockerPassword()
-  case NPMMode:
-    return ctx.getNPMPassword()
-  default:
-    return "", fmt.Errorf("unknown mode %s", ctx.Mode)
-  }
-}
-
-// GetUsername
-func (ctx *Context) GetUsername() (string, error) {
-  if ctx.username != "" {
-    return ctx.key, nil
-  }
-
-  if ctx.inputs == nil {
-    return "", fmt.Errorf("no inputs have been read")
-  }
-
-  mode := ctx.GetMode()
-
-  switch mode {
-  case GitMode:
-    return ctx.getGitUsername()
-  case DockerMode:
-    return ctx.getDockerUsername()
-  case NPMMode:
-    return ctx.getNPMUsername()
-  default:
-    return "", fmt.Errorf("unknown mode %s", ctx.Mode)
-  }
+  return &op.Query{Context: *opCtx, Key: key}, nil
 }
 
 // GetVaultName
@@ -236,109 +191,83 @@ func (ctx *Context) GetVaultName() string {
   return ctx.vaultName
 }
 
+// ReadInput scans from stdin and splits each line by "=" to find key/value pairs.
+// Any line which does not contain "=" is skipped over. Tries to store the inputs in the provided map,
+// but if it's nil, will create a new map and fill that; returns the filled inputs map.
+func (ctx *Context) ReadInput() error {
+  if ctx.cmd == nil {
+    return fmt.Errorf("unable to read inputs in the correct format without knowledge of the current command")
+  }
+
+  var lines []string
+  if !ctx.GetMode().IsPredefined() && ctx.GetCmd().Use != "store" {
+    lines = []string{}
+  } else {
+    lines = scanStdinLines()
+  }
+  ctx.input = strings.Join(lines, "\n") + "\n"
+
+  mode := ctx.GetMode()
+
+  switch mode {
+  case DockerMode:
+    if ctx.cmd.Use == "store" {
+      return ctx.readJSONInputs(lines)
+    } else {
+      return ctx.readServerURLInput(lines)
+    }
+  case GitMode:
+    return ctx.readKeyValueInputs(lines)
+  default:
+    return nil
+  }
+}
+
+// SetCmd
+func (ctx *Context) SetCmd(cmd *cobra.Command) {
+  ctx.cmd = cmd
+}
+
 // SetVaultName
 func (ctx *Context) SetVaultName(vaultName string, shouldCreate bool) error {
   ctx.vaultName = vaultName
-
   ctx.setVaultUUID("")
-  vaultUUID, err := ctx.GetVaultUUID()
+
+  opCtx, err := ctx.getOpCtx()
   if err != nil {
     return err
   }
 
+  vault, err := op.GetVault(op.Query{Context: *opCtx, Key: vaultName})
+  if err != nil {
+    return err
+  }
+
+  vaultUUID := gjson.Get(vault, "uuid").String()
+
   if vaultUUID != "" {
+    ctx.setVaultName(vaultName)
+    ctx.setVaultUUID(vaultUUID)
     return nil
   }
   if !shouldCreate {
     return fmt.Errorf("unable to get specified vault's uuid")
   }
 
-  _, err = ctx.createVault(vaultName)
+  vaultUUID, err = ctx.createVault(vaultName)
   if err != nil {
     return err
   }
 
   ctx.setVaultName(vaultName)
-  return nil
-}
-
-// GetVaultUUID gets the configured vault's uuid.
-func (ctx *Context) GetVaultUUID() (string, error) {
-  if ctx.vaultUUID != "" {
-    return ctx.vaultUUID, nil
-  }
-
-  vaultUUIDIntf := viper.Get(vaultUUIDKey)
-  if vaultUUIDIntf != nil {
-    vaultUUID := vaultUUIDIntf.(string)
-    if vaultUUID != "" {
-      ctx.vaultUUID = vaultUUID
-      return ctx.vaultUUID, nil
-    }
-  }
-
-  sessionToken, err := ctx.GetSessionToken()
-  if err != nil {
-    return "", err
-  }
-
-  vaultName := ctx.GetVaultName()
-
-  outBytes, err := op.Get(sessionToken, true, "vault", vaultName)
-  if err != nil {
-    return "", err
-  }
-
-  vaultUUID := gjson.Get(string(outBytes), "uuid").String()
-  if vaultUUID == "" {
-    if vaultName != ctx.vaultNameDefault {
-      return "", fmt.Errorf("unable to get the uuid of vault named '%s'", vaultName)
-    } else {
-      vaultUUID, err = ctx.createVault(vaultName)
-    }
-  }
-
   ctx.setVaultUUID(vaultUUID)
-  return vaultUUID, nil
-}
-
-// GetSessionToken retrieves the locally stored session token, if still valid.
-func (ctx *Context) GetSessionToken() (string, error) {
-  if ctx.sessionToken != "" {
-    return ctx.sessionToken, nil
-  }
-
-  dateIntf := viper.Get(sessionTokenDateKey)
-  if dateIntf == nil {
-    return ctx.Signin()
-  }
-
-  date, err := time.Parse(timeFormat, dateIntf.(string))
-  if err != nil || time.Now().Sub(date).Minutes() >= 30 {
-    return ctx.Signin()
-  }
-
-  sessionTokenIntf := viper.Get(sessionTokenValueKey)
-  if sessionTokenIntf == nil {
-    return ctx.Signin()
-  }
-
-  ctx.sessionToken = sessionTokenIntf.(string)
-  return ctx.sessionToken, nil
-}
-
-// ClearSessionToken clears all session token related config values.
-func (ctx *Context) ClearSessionToken() {
-  ctx.sessionToken = ""
-  viper.Set(sessionTokenDateKey, "")
-  viper.Set(sessionTokenValueKey, "")
-  viper.WriteConfig()
+  return nil
 }
 
 // Signin clears the current cached session token, requests the user to signin,
 // stores the new returned session token and returns it as well.
 func (ctx *Context) Signin() (string, error) {
-  ctx.ClearSessionToken()
+  ctx.clearSessionToken()
   sessionToken, err := op.Signin()
   if err != nil {
     return "", err
@@ -351,9 +280,20 @@ func (ctx *Context) Signin() (string, error) {
   return sessionToken, nil
 }
 
-// - unexported fns -
 
 // -- generic helpers --
+
+func isValidGenericMode(mode string) bool {
+  if mode == "" || strings.Contains(mode, " \n\t") {
+    return false
+  }
+  for _, predefinedMode := range PredefinedModes {
+    if strings.HasPrefix(strings.ToLower(mode), predefinedMode) {
+      return false
+    }
+  }
+  return true
+}
 
 // scanStdinLines scans stdin until it reads two newlines or EOF,
 // closes os.Stdin and returns the scanned lines.
@@ -378,17 +318,34 @@ func scrubURL(URL *url.URL) {
 
 // -- ctx helper fns --
 
+// clearSessionToken clears all session token related config values.
+func (ctx *Context) clearSessionToken() {
+  if ctx.opCtx == nil {
+    ctx.opCtx = &op.Context{}
+  }
+  ctx.opCtx.SessionToken = ""
+  viper.Set(sessionTokenDateKey, "")
+  viper.Set(sessionTokenValueKey, "")
+  viper.WriteConfig()
+}
+
 // createVault
 func (ctx *Context) createVault(vaultName string) (string, error) {
-  sessionToken, err := ctx.GetSessionToken()
+  sessionToken, err := ctx.getSessionToken()
   if err != nil {
     return "", err
   }
 
-  vaultUUID, err := op.CreateVault(sessionToken, ctx.GetVaultName(), fmt.Sprintf(vaultDescription, ctx.GetName()))
+  output, err := op.CreateVault(op.CreateVaultMutation{
+    SessionToken: sessionToken,
+    Title: vaultName,
+    Description: fmt.Sprintf(vaultDescription, ctx.GetName()),
+  })
   if err != nil {
     return "", err
   }
+
+  vaultUUID := gjson.Get(output, "uuid").String()
   if vaultUUID == "" {
     return "", fmt.Errorf("unable to get specified vault's uuid")
   }
@@ -396,18 +353,110 @@ func (ctx *Context) createVault(vaultName string) (string, error) {
   return vaultUUID, nil
 }
 
-// readJSONInputs
-func (ctx *Context) readJSONInputs(lines []string) error {
-  var inputs map[string]string
+// getModeKey
+func (ctx *Context) getModeKey() (string, error) {
+  mode := ctx.GetMode()
+  switch mode {
+  case DockerMode:
+    return ctx.getDockerKey()
+  case GitMode:
+    return ctx.getGitKey()
+  default:
+    if string(mode) == "" {
+      return "", fmt.Errorf("unknown mode %s", ctx.ModeFlag)
+    }
+    return string(mode), nil
+  }
+}
 
-  input := []byte(strings.Join(lines, "\n"))
-  err := json.Unmarshal(input, &inputs)
-  if err != nil {
-    return err
+// getOpCtx gets the configured vault uuid and session token and stores them in context.
+func (ctx *Context) getOpCtx() (*op.Context, error) {
+  if ctx.opCtx != nil && ctx.opCtx.SessionToken != "" && ctx.opCtx.VaultUUID != "" {
+    return ctx.opCtx, nil
   }
 
-  ctx.inputs = inputs
-  return nil
+  var vaultUUID string
+  vaultUUIDIntf := viper.Get(vaultUUIDKey)
+  if vaultUUIDIntf != nil {
+    vaultUUID = vaultUUIDIntf.(string)
+  }
+
+  sessionToken, err := ctx.getSessionToken()
+  if err != nil {
+    return nil, err
+  }
+
+  if vaultUUID != "" && sessionToken != "" {
+    ctx.opCtx = &op.Context{
+      SessionToken: sessionToken,
+      VaultUUID:    vaultUUID,
+    }
+    return ctx.opCtx, nil
+  }
+
+  vaultName := ctx.GetVaultName()
+
+  output, err := op.GetVault(op.Query{
+    Context: op.Context{SessionToken: sessionToken},
+    Key: vaultName,
+  })
+  if err != nil {
+    return nil, err
+  }
+
+  vaultUUID = gjson.Get(output, "uuid").String()
+  if vaultUUID == "" {
+    if vaultName != ctx.vaultNameDefault {
+      return nil, fmt.Errorf("unable to get the uuid of vault named '%s'", vaultName)
+    }
+    vaultUUID, err = ctx.createVault(vaultName)
+    if err != nil {
+      return nil, err
+    }
+  }
+
+  ctx.setVaultUUID(vaultUUID)
+
+  ctx.opCtx = &op.Context{
+    SessionToken: sessionToken,
+    VaultUUID:    vaultUUID,
+  }
+  return ctx.opCtx, nil
+}
+
+// getSessionToken retrieves the locally stored session token, if still valid.
+func (ctx *Context) getSessionToken() (string, error) {
+  if ctx.opCtx == nil {
+    ctx.opCtx = &op.Context{}
+  }
+
+  if ctx.opCtx.SessionToken != "" {
+    return ctx.opCtx.SessionToken, nil
+  }
+
+  dateIntf := viper.Get(sessionTokenDateKey)
+  if dateIntf == nil {
+    return ctx.Signin()
+  }
+
+  date, err := time.Parse(timeFormat, dateIntf.(string))
+  if err != nil || time.Now().Sub(date).Minutes() >= 30 {
+    return ctx.Signin()
+  }
+
+  sessionTokenIntf := viper.Get(sessionTokenValueKey)
+  if sessionTokenIntf == nil {
+    return ctx.Signin()
+  }
+
+  ctx.opCtx.SessionToken = sessionTokenIntf.(string)
+  return ctx.opCtx.SessionToken, nil
+}
+
+// readJSONInputs
+func (ctx *Context) readJSONInputs(lines []string) error {
+  input := []byte(strings.Join(lines, "\n"))
+  return json.Unmarshal(input, &ctx.inputs)
 }
 
 // readKeyValueInputs
@@ -428,7 +477,7 @@ func (ctx *Context) readServerURLInput(lines []string) error {
     return fmt.Errorf("cannot parse url from multiple lines of input")
   }
 
-  ctx.inputs = map[string]string{dockerServerURLKey: lines[0]}
+  ctx.inputs[dockerServerURLKey] = lines[0]
   return nil
 }
 
@@ -441,14 +490,31 @@ func (ctx *Context) setVaultName(vaultName string) {
 
 // setVaultUUID
 func (ctx *Context) setVaultUUID(vaultUUID string) {
-  ctx.vaultUUID = vaultUUID
+  if ctx.opCtx == nil {
+    ctx.opCtx = &op.Context{}
+  }
+  ctx.opCtx.VaultUUID = vaultUUID
   viper.Set(vaultUUIDKey, vaultUUID)
   viper.WriteConfig()
 }
 
 // -- mode specific fns --
 
-// --- git ---
+// getDockerKey
+func (ctx *Context) getDockerKey() (string, error) {
+  cmd := ctx.GetCmd()
+  if cmd == nil {
+    return "", fmt.Errorf("cannot get docker key: unable to determine how to read inputs without knowledge of what command was run")
+  }
+
+  URL, err := url.Parse(ctx.inputs[dockerServerURLKey])
+  if err != nil {
+    return "", err
+  }
+
+  scrubURL(URL)
+  return URL.String(), nil
+}
 
 // getGitKey
 func (ctx *Context) getGitKey() (string, error) {
@@ -485,129 +551,4 @@ func (ctx *Context) getGitKey() (string, error) {
   scrubURL(URL)
 
   return URL.String(), nil
-}
-
-// getGitPassword
-func (ctx *Context) getGitPassword() (string, error) {
-  if rawurl, hasRawurl := ctx.inputs["url"]; hasRawurl {
-    URL, err := url.Parse(rawurl)
-    if err != nil {
-      return "", err
-    }
-
-    if URL.User == nil {
-      return "", fmt.Errorf("url does not contain password")
-    }
-
-    password, hasPassword := URL.User.Password()
-    if !hasPassword {
-      return "", fmt.Errorf("url does not contain password")
-    }
-    return password, nil
-  }
-
-  if password, hasPassword := ctx.inputs["password"]; hasPassword {
-    return password, nil
-  } else {
-    return "", fmt.Errorf("password is missing in credentials")
-  }
-}
-
-// getGitUsername
-func (ctx *Context) getGitUsername() (string, error) {
-  if rawurl, hasRawurl := ctx.inputs["url"]; hasRawurl {
-    URL, err := url.Parse(rawurl)
-    if err != nil {
-      return "", err
-    }
-
-    if URL.User == nil {
-      return "", fmt.Errorf("url does not contain password")
-    }
-
-    return URL.User.Username(), nil
-  }
-
-  if username, hasUsername := ctx.inputs["username"]; hasUsername {
-    return username, nil
-  } else {
-    return "", fmt.Errorf("username is missing in credentials")
-  }
-}
-
-// --- docker ---
-
-// getDockerKey
-func (ctx *Context) getDockerKey() (string, error) {
-  cmd := ctx.GetCmd()
-  if cmd == nil {
-    return "", fmt.Errorf("cannot get docker key: unable to determine how to read inputs without knowledge of what command was run")
-  }
-
-  URL, err := url.Parse(ctx.inputs[dockerServerURLKey])
-  if err != nil {
-    return "", err
-  }
-
-  scrubURL(URL)
-  return URL.String(), nil
-}
-
-// getDockerPassword
-func (ctx *Context) getDockerPassword() (string, error) {
-  cmd := ctx.GetCmd()
-  if cmd == nil {
-    return "", fmt.Errorf("cannot get docker password: unable to determine how to read inputs without knowledge of what command was run")
-  }
-
-  if password, hasPassword := ctx.inputs["Secret"]; hasPassword {
-    return password, nil
-  } else {
-    return "", fmt.Errorf("Secret is missing in credentials")
-  }
-}
-
-// getDockerUsername
-func (ctx *Context) getDockerUsername() (string, error) {
-  if username, hasUsername := ctx.inputs["Username"]; hasUsername {
-    return username, nil
-  } else {
-    return "", fmt.Errorf("Username is missing in credentials")
-  }
-}
-
-// --- npm ---
-
-// getNPMKey
-func (ctx *Context) getNPMKey() (string, error) {
-  registry, hasRegistry := ctx.inputs["registry"]
-  if !hasRegistry {
-    return "", fmt.Errorf("registry is missing npm credentials")
-  }
-
-  URL, err := url.Parse(registry)
-  if err != nil {
-    return "", err
-  }
-
-  scrubURL(URL)
-  return URL.String(), nil
-}
-
-// getNPMPassword
-func (ctx *Context) getNPMPassword() (string, error) {
-  if password, hasPassword := ctx.inputs["_auth"]; hasPassword {
-    return password, nil
-  } else {
-    return "", fmt.Errorf("_auth is missing in credentials")
-  }
-}
-
-// getNPMUsername
-func (ctx *Context) getNPMUsername() (string, error) {
-  if username, hasUsername := ctx.inputs["email"]; hasUsername {
-    return username, nil
-  } else {
-    return "", fmt.Errorf("email is missing in credentials")
-  }
 }

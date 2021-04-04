@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# config dir
+configdir=$HOME/.credential-1password
+
+# read in project credential keys
+repocredentials=$PWD/.credentials
+defaultcredentials=$configdir/credentials
+
+conf=""
+if [[ -e $repocredentials ]]; then
+  conf=$(cat $repocredentials)
+elif [[ -e $defaultcredentials ]]; then
+  conf=$(cat $defaultcredentials)
+fi
+
+if [[ $conf == "" ]]; then
+  echo "  "
+  echo "  no 1password credentials file found at:" 1>&2
+  echo "  - $repocredentials" 1>&2
+  echo "  - $defaultcredentials" 1>&2
+  echo "  "
+  echo "  credentials file should be formatted like:"
+  echo "  git"
+  echo "  credentials passed to git-credential-1password get"
+  echo "  "
+  echo "  foobar"
+  echo "  credentials passed to credential-1password get --mode=foobar"
+  echo "  "
+  exit 1
+fi
+
+# convert 2 newlines to 1 tab
+conf=${conf//$'\n'$'\n'/$'\t'}
+
+# eat up further newlines
+while [[ "$conf" =~ $'\t'$'\n' ]] ; do
+  conf=${conf//$'\t'$'\n'/$'\t'}
+done
+
+# sqeeze tabs
+conf=${conf//$'\t'$'\t'/$'\t'}
+
+# split into array
+IFS=$'\t'; result=( $conf )
+
+secrets=""
+
+# aggregate secrets
+for credential in ${result[@]}; do
+  mode=$(printf $credential | head -n 1)
+  keys=$(printf $credential | sed 1d)
+  cmd="credential-1password --mode=$mode"
+  if [[ "$(which $cmd)" != "" ]]; then
+    credentials=$(printf $keys | $cmd get)
+    rv=$?
+    if [[ "$rv" != "0" ]]; then
+      exit $?
+    fi
+    secrets+="--secret id=$mode-credentials,src=<(printf \$'$credentials') "
+  fi
+done
+
+# build docker image with secrets
+DOCKER_BUILDKIT=1 docker build $secrets $@
