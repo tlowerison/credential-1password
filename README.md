@@ -1,12 +1,14 @@
 # credential-1password
 
-A credential helper which stores secrets in 1Password and interfaces seamlessly with both git and docker. 1Password issues session tokens which remain valid until unused for 30min, so development flows naturally since your master password is only requested for git / docker operations after periods of inactivity.
+A credential helper which stores secrets in 1Password and interfaces seamlessly with both git and docker. Also serves as a remote file store for any other types of credentials you wish to store (e.g. npm).
+
+1Password issues session tokens which remain valid until unused for 30min, so your master password is only requested after periods of inactivity. Session tokens are automatically stored in your OS's encrypted keystore. Currently Keychain on darwin (Apple devices) is the only keystore supported, up next is maybe gnome-keyring for Linux. Interfacing with the keystore is mostly handled by https://pkg.go.dev/github.com/keybase/go-keychain.
 
 ## Install
-credential-1password relies on 1Password's `op` CLI under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
+credential-1password relies on 1Password's `op` tool under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started).
 
 ```sh
-wget -q -O /usr/local/bin/credential-1password https://github.com/tlowerison/credential-1password/releases/download/v1.0.4/credential-1password
+wget -q -O /usr/local/bin/credential-1password https://github.com/tlowerison/credential-1password/releases/download/v1.0.4/credential-1password-darwin
 chmod u+x /usr/local/bin/credential-1password
 ```
 

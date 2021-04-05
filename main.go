@@ -9,8 +9,7 @@ import (
 )
 
 func main() {
-  ctx, err := util.Register("credential-1password")
-  util.HandleErr(err)
+  ctx := util.NewContext()
 
   var rootCmd *cobra.Command
   rootCmd = &cobra.Command{
@@ -49,8 +48,8 @@ func main() {
     Run:  util.RunWithArgs(ctx, Config),
   }
 
-  rootCmd.PersistentFlags().StringVarP(&ctx.ModeFlag, "mode", "m", "", "credential mode - predefined modes include {git,docker}; other modes can be used for basic file storage")
-  configCmd.Flags().BoolVarP(&ctx.ShouldCreateVault, "create", "c", false, "If setting the vault, and no vault exists with that name, will create a new vault.")
+  rootCmd.PersistentFlags().StringVarP(&ctx.Flags.Mode, "mode", "m", "", "credential mode - predefined modes include {git,docker}; other modes can be used for basic file storage")
+  configCmd.Flags().BoolVarP(&ctx.Flags.ConfigVaultCreate, "create", "c", false, "If setting the vault, and no vault exists with that name, will create a new vault.")
 
   rootCmd.AddCommand(configCmd)
   rootCmd.AddCommand(getCmd)

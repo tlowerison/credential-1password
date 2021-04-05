@@ -32,7 +32,10 @@ type CreateVaultMutation struct {
   Title        string
 }
 
-var retryRegexp = regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} You are not currently signed in. Please run `op signin --help` for instructions")
+var retryRegexps = []*regexp.Regexp{
+  regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} You are not currently signed in. Please run `op signin --help` for instructions"),
+  regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} Invalid session token"),
+}
 
 // op wraps 1Password's cli tool op.
 func op(stdin string, args []string) (string, error) {
@@ -154,5 +157,13 @@ func Signin() (string, error) {
 
 // ShouldClearSessionAndRetry
 func ShouldClearSessionAndRetry(err error) bool {
-  return err != nil && retryRegexp.MatchString(err.Error())
+  if err == nil {
+    return false
+  }
+  for _, retryRegexp := range retryRegexps {
+    if retryRegexp.MatchString(err.Error()) {
+      return true
+    }
+  }
+  return false
 }

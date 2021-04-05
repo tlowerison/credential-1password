@@ -81,33 +81,41 @@ func Config(ctx *util.Context, args []string) error {
   }
 }
 
-// Vault gets/sets which 1Password vault credentials should be stored in.
+// ConfigVault gets/sets which 1Password vault credentials should be stored in.
 func ConfigVault(ctx *util.Context, args []string) error {
-  vaultName := ctx.GetVaultName()
+  vaultName, err := ctx.GetVaultName()
+  if err != nil {
+    return err
+  }
+
   if len(args) == 0 {
-    if ctx.ShouldCreateVault {
+    if ctx.Flags.ConfigVaultCreate {
       return ctx.SetVaultName(vaultName, true)
     } else {
       fmt.Println(vaultName)
       return nil
     }
   }
-  return ctx.SetVaultName(args[0], ctx.ShouldCreateVault)
+
+  return ctx.SetVaultName(args[0], ctx.Flags.ConfigVaultCreate)
 }
 
+// ConfigDockerBuildCredentialsTreeSearch gets/sets whether credential-1password
+// should look up the directory tree when searching for a credential config file
+// when running docker-build.
 func ConfigDockerBuildCredentialsTreeSearch(ctx *util.Context, args []string) error {
   if len(args) == 0 {
-    fmt.Println(ctx.GetDockerBuildCredentialsTreeSearch())
+    value, err := ctx.GetDockerBuildCredentialsTreeSearch()
+    if err != nil {
+      return err
+    }
+    fmt.Println(value)
     return nil
   } else {
     value := args[0]
     if value != "true" && value != "false" {
       return fmt.Errorf("unacceptable value for %s, expected: {true,false}", util.DockerBuildCredentialsTreeSearchKey)
     }
-    dockerBuildCredentialsTreeSearch := false
-    if value == "true" {
-      dockerBuildCredentialsTreeSearch = true
-    }
-    return ctx.SetDockerBuildCredentialsTreeSearch(dockerBuildCredentialsTreeSearch)
+    return ctx.SetDockerBuildCredentialsTreeSearch(value)
   }
 }
