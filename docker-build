@@ -6,19 +6,13 @@ configdir=$HOME/.credential-1password
 # read in project credentials config
 filename=".credentials"
 
-credentials_tree_search=$(cat $configdir/config.yaml | grep "  credentials-tree-search:" | sed 's/.*: //')
-
 conf=""
-if [[ $credentials_tree_search == "true" ]]; then
-  dir=$PWD
-  while [[ ! -e "$dir/$filename" && "$dir" != "$HOME"  ]]; do
-    dir=$(dirname "$dir")
-  done
-  if [[ -e "$dir/$filename" ]]; then
-    conf=$(cat "$dir/$filename")
-  fi
-elif [[ -e $PWD/$filename ]]; then
-  conf=$(cat $PWD/$filename)
+dir=$PWD
+while [[ ! -e "$dir/$filename" && "$dir" != "$HOME"  ]]; do
+  dir=$(dirname "$dir")
+done
+if [[ -e "$dir/$filename" ]]; then
+  conf=$(cat "$dir/$filename")
 fi
 
 if [[ $conf == "" && -e $configdir/$filename ]]; then

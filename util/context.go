@@ -46,7 +46,6 @@ var PredefinedModes = []string{
   string(GitMode),
 }
 
-const DockerBuildCredentialsTreeSearchKey = "docker-build.credentials-tree-search"
 const VaultKey = "vault"
 
 func (m Mode) IsPredefined() bool {
@@ -87,12 +86,6 @@ func NewContext() *Context {
 // GetCmd returns the private cmd field.
 func (ctx *Context) GetCmd() *cobra.Command {
   return ctx.cmd
-}
-
-// GetDockerBuildCredentialsTreeSearch returns the configured
-// value for `docker-build.credentials-tree-search`.
-func (ctx *Context) GetDockerBuildCredentialsTreeSearch() (string, error) {
-  return keystore.Get(DockerBuildCredentialsTreeSearchKey)
 }
 
 // GetInput returns the private field input.
@@ -226,11 +219,6 @@ func (ctx *Context) ReadInput() (err error) {
 // cmd should be assigned by a prerun cobra command hook.
 func (ctx *Context) SetCmd(cmd *cobra.Command) {
   ctx.cmd = cmd
-}
-
-// SetDockerBuildCredentialsTreeSearch
-func (ctx *Context) SetDockerBuildCredentialsTreeSearch(value string) error {
-  return keystore.Set(DockerBuildCredentialsTreeSearchKey, value)
 }
 
 // SetVaultName does:

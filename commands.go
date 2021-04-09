@@ -10,7 +10,6 @@ import (
 
 var ConfigKeys = []string{
   util.VaultKey,
-  util.DockerBuildCredentialsTreeSearchKey,
 }
 
 // Get retrieves a credential from 1Password
@@ -72,8 +71,6 @@ func Erase(ctx *util.Context) error {
 func Config(ctx *util.Context, args []string) error {
   key := args[0]
   switch key {
-  case util.DockerBuildCredentialsTreeSearchKey:
-    return ConfigDockerBuildCredentialsTreeSearch(ctx, args[1:])
   case util.VaultKey:
     return ConfigVault(ctx, args[1:])
   default:
@@ -98,24 +95,4 @@ func ConfigVault(ctx *util.Context, args []string) error {
   }
 
   return ctx.SetVaultName(args[0], ctx.Flags.ConfigVaultCreate)
-}
-
-// ConfigDockerBuildCredentialsTreeSearch gets/sets whether credential-1password
-// should look up the directory tree when searching for a credential config file
-// when running docker-build.
-func ConfigDockerBuildCredentialsTreeSearch(ctx *util.Context, args []string) error {
-  if len(args) == 0 {
-    value, err := ctx.GetDockerBuildCredentialsTreeSearch()
-    if err != nil {
-      return err
-    }
-    fmt.Println(value)
-    return nil
-  } else {
-    value := args[0]
-    if value != "true" && value != "false" {
-      return fmt.Errorf("unacceptable value for %s, expected: {true,false}", util.DockerBuildCredentialsTreeSearchKey)
-    }
-    return ctx.SetDockerBuildCredentialsTreeSearch(value)
-  }
 }
