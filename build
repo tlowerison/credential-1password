@@ -1,9 +1,9 @@
 #!/bin/bash
 
 author="tlowerison"
-name="credential-1password"
-bundle="com.$author.$name"
-repo="$GOPATH/src/github.com/$author/$name"
+app="credential-1password"
+bundle="com.$author.$app"
+repo="$GOPATH/src/github.com/$author/$app"
 
 builds=( "darwin/amd64" ) # TODO: darwin/arm64, linux/amd64
 install_location="/usr/local/bin"
@@ -11,7 +11,6 @@ install_location="/usr/local/bin"
 build_dest=$(mktemp -d -t "$bundle")
 pkg_src=$(mktemp -d -t "$bundle")
 zip_src=$(mktemp -d -t "$bundle")
-tmp_file_prefix="tmp-$name"
 
 cleanup() {
   rc=$?
@@ -30,11 +29,11 @@ for build in "${builds[@]}"; do
   GOOS="$os" GOARCH="$arch" go build -o "$build_dest/$os/$arch"
 done
 
-find "$build_dest" -type f | xargs lipo -create -output "$repo/$name"
+find "$build_dest" -type f | xargs lipo -create -output "$repo/$app"
 
 copy_contents() {
   dst="$1"
-  cp "$repo/$name" "$dst/$name"
+  cp "$repo/$app" "$dst/$app"
   ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{}
   ls -p "$dst" | grep -v / | xargs -n 1 -I {} chmod u+x $dst/{}
   ls -p "$dst" | grep -v / | xargs -n 1 -I {} codesign --sign "Developer ID Application" -o runtime -v "$dst/{}"
@@ -51,7 +50,7 @@ pkgbuild \
   --install-location="$install_location" \
   --scripts="scripts" \
    --ownership=preserve \
-  "$repo/$name.pkg"
+  "$repo/$app.pkg"
 
 # zip
 
@@ -60,12 +59,12 @@ copy_contents "$zip_src"
 # remove .DS_Store files
 find "$zip_src" -name '*.DS_Store' -type f -delete
 
-ditto -c -k "$zip_src" "$repo/$name.zip"
+ditto -c -k "$zip_src" "$repo/$app.zip"
 
 # remove unwanted file that shows up in .zip
-zip -d "$repo/$name.zip" "._docker-build"
+zip -d "$repo/$app.zip" "._docker-build"
 
-codesign --sign "Developer ID Application" -o runtime -v "$repo/$name.zip"
+codesign --sign "Developer ID Application" -o runtime -v "$repo/$app.zip"
 
 # cleanup
 trap - INT TERM; cleanup
