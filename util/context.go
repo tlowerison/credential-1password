@@ -63,7 +63,7 @@ func (m Mode) Valid() bool {
 
 const serviceName = "credential-1password"
 const sessionTokenDateKey = "session-token.date"
-const sessionTokenValueKey = "session-token"
+const sessionTokenValueKey = "session-token.value"
 
 var vaultNameKey = fmt.Sprintf("%s.name", VaultKey)
 var vaultUUIDKey = fmt.Sprintf("%s.uuid", VaultKey)
@@ -164,20 +164,22 @@ func (ctx *Context) GetOpQuery() (*op.Query, error) {
 // GetVaultName reads the configured vault name
 // or returns the cached value if already read.
 func (ctx *Context) GetVaultName() (string, error) {
-  if ctx.vaultName == "" {
-    vaultName, err := keystore.Get(vaultNameKey)
-    if err != nil {
-      return "", err
-    }
-    if vaultName == "" {
-      err = keystore.Set(vaultNameKey, vaultNameDefault)
-      if err != nil {
-        return "", err
-      }
-    }
-    ctx.vaultName = vaultName
+  if ctx.vaultName != "" {
+    return ctx.vaultName, nil
   }
-  return ctx.vaultName, nil
+
+  vaultName, err := keystore.Get(vaultNameKey)
+  if err != nil {
+    return "", err
+  }
+
+  if vaultName != "" {
+    ctx.vaultName = vaultName
+    return vaultName, nil
+  }
+
+  ctx.vaultName = vaultNameDefault
+  return vaultNameDefault, keystore.Set(vaultNameKey, vaultNameDefault)
 }
 
 // ReadInput scans from stdin and splits each line by "=" to find key/value pairs.
@@ -264,7 +266,6 @@ func (ctx *Context) SetVaultName(vaultName string, shouldCreate bool) error {
 // Signin clears the current cached session token, requests the user to signin,
 // stores the new returned session token and returns it as well.
 func (ctx *Context) Signin() (string, error) {
-  ctx.clearSessionToken()
   sessionToken, err := op.Signin()
   if err != nil {
     return "", err
@@ -274,8 +275,6 @@ func (ctx *Context) Signin() (string, error) {
   if err != nil {
     return "", err
   }
-
-  keystore.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
 
   return sessionToken, nil
 }
@@ -477,6 +476,10 @@ func (ctx *Context) setSessionToken(sessionToken string) error {
   }
   ctx.opCtx.SessionToken = sessionToken
 
+  err := keystore.Set(sessionTokenDateKey, time.Now().Format(timeFormat))
+  if err != nil {
+    return err
+  }
   return keystore.Set(sessionTokenValueKey, sessionToken)
 }
 
