@@ -13,11 +13,14 @@ pkg_src=$(mktemp -d -t "$bundle")
 zip_src=$(mktemp -d -t "$bundle")
 
 cleanup() {
-  rc=$?
+  crc=$?
+  trap - INT TERM
   if [[ "$build_dst" != "" ]]; then rm -rf "$build_dst"; fi
   if [[ "$pkg_src" != "" ]]; then rm -rf "$pkg_src"; fi
   if [[ "$zip_src" != "" ]]; then rm -rf "$zip_src"; fi
-  exit `expr $rc + 0`
+  if [[ "$crc" != "0" ]]; then
+    exit `expr $crc + 0`
+  fi
 }
 
 trap "trap - INT TERM; cleanup" INT TERM
@@ -27,6 +30,11 @@ for build in "${builds[@]}"; do
   os="${combo[0]}"
   arch="${combo[1]}"
   GOOS="$os" GOARCH="$arch" go build -o "$build_dst/$os/$arch"
+  rc=$?
+  if [[ "$rc" != "0" ]]; then
+    cleanup
+    exit `expr $rc + 0`
+  fi
 done
 
 find "$build_dst" -type f | xargs lipo -create -output "$repo/$app"
@@ -66,5 +74,4 @@ ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} zip -d "$repo/$app.zip" "._
 
 codesign --sign "Developer ID Application" -o runtime -v "$repo/$app.zip"
 
-# cleanup
-trap - INT TERM; cleanup
+cleanup
