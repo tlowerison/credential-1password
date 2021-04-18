@@ -6,4 +6,4 @@
 !docker-build
 
 **/.DS_STORE
-gon.json
+**/*.pkg
