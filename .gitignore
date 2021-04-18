@@ -4,6 +4,9 @@
 !*.*
 !LICENSE
 !docker-build
+!build
+!scripts/**/*
 
 **/.DS_STORE
 **/*.pkg
+**/*.zip

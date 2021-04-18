@@ -1,0 +1,72 @@
+#!/bin/bash
+
+author="tlowerison"
+name="credential-1password"
+bundle="com.$author.$name"
+repo="$GOPATH/src/github.com/$author/$name"
+
+builds=( "darwin/amd64" ) # TODO: darwin/arm64, linux/amd64
+install_location="/usr/local/bin"
+
+build_dest=$(mktemp -d -t "$bundle")
+pkg_src=$(mktemp -d -t "$bundle")
+zip_src=$(mktemp -d -t "$bundle")
+tmp_file_prefix="tmp-$name"
+
+cleanup() {
+  rc=$?
+  if [[ "$build_dest" != "" ]]; then rm -rf "$build_dest"; fi
+  if [[ "$pkg_src" != "" ]]; then rm -rf "$pkg_src"; fi
+  if [[ "$zip_src" != "" ]]; then rm -rf "$zip_src"; fi
+  exit `expr $rc + 0`
+}
+
+trap "trap - INT TERM; cleanup" INT TERM
+
+for build in "${builds[@]}"; do
+  combo=( $(echo "$build" | tr "/" " " ) )
+  os="${combo[0]}"
+  arch="${combo[1]}"
+  GOOS="$os" GOARCH="$arch" go build -o "$build_dest/$os/$arch"
+done
+
+find "$build_dest" -type f | xargs lipo -create -output "$repo/$name"
+
+copy_contents() {
+  dst="$1"
+  cp "$repo/$name" "$dst/$name"
+  codesign --sign "Developer ID Application" "$dst/$name"
+
+  ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{}
+  ls -p "$dst" | grep -v / | xargs -n 1 -I {} chmod u+x $dst/{}
+}
+
+# pkg
+
+copy_contents "$pkg_src"
+
+pkgbuild \
+  --root="$pkg_src" \
+  --sign="Developer ID Installer" \
+  --identifier="$bundle" \
+  --install-location="$install_location" \
+  --scripts="scripts" \
+   --ownership=preserve \
+  "$repo/$name.pkg"
+
+# zip
+
+copy_contents "$zip_src"
+
+# remove .DS_Store files
+find "$zip_src" -name '*.DS_Store' -type f -delete
+
+ditto -c -k "$zip_src" "$repo/$name.zip"
+
+# remove unwanted file that shows up in .zip
+zip -d "$repo/$name.zip" "._docker-build"
+
+codesign --sign "Developer ID Application" "$repo/$name.zip"
+
+# cleanup
+trap - INT TERM; cleanup

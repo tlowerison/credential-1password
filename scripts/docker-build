@@ -1,35 +1,24 @@
 #!/bin/bash
 
-# config dir
-configdir=$HOME/.credential-1password
-
 # read in project credentials config
 filename=".credentials"
 
 conf=""
-dir=$PWD
-while [[ ! -e "$dir/$filename" && "$dir" != "$HOME"  ]]; do
-  dir=$(dirname "$dir")
-done
+dir="$PWD"
+case "$dir" in
+  "$HOME"*)
+    while [[ ! -e "$dir/$filename" && "$dir" != "$HOME"  ]]; do
+      dir=$(dirname "$dir")
+    done
+    ;;
+esac
 if [[ -e "$dir/$filename" ]]; then
   conf=$(cat "$dir/$filename")
 fi
 
-if [[ $conf == "" && -e $configdir/$filename ]]; then
-  conf=$(cat $configdir/$filename)
-fi
-
 if [[ $conf == "" ]]; then
-  echo "  "
-  echo "  no 1password credentials file found"
-  echo "  credentials file should be formatted like:"
-  echo "  git"
-  echo "  credentials passed to git-credential-1password get"
-  echo "  "
-  echo "  foobar"
-  echo "  credentials passed to credential-1password get --mode=foobar"
-  echo "  "
-  exit 1
+  DOCKER_BUILDKIT=1 docker build $@
+  exit $?
 fi
 
 # convert 2 newlines to 1 tab
@@ -58,12 +47,12 @@ for credential in ${result[@]}; do
   else
     credentials=$(printf $keys | credential-1password get --mode=$mode)
   fi
-  rv=$?
-  if [[ "$rv" != "0" ]]; then
+  rc=$?
+  if [[ "$rc" != "0" ]]; then
     exit $?
   fi
   secrets+="--secret=id=$mode-credentials,src=<(printf \$'$credentials') "
 done
 
 # build docker image with secrets
-eval "DOCKER_BUILDKIT=1 docker build $secrets $@"
+DOCKER_BUILDKIT=1 docker build $secrets $@
