@@ -19,12 +19,12 @@ func Get(ctx *util.Context) error {
     return err
   }
 
+  // err should only occur if document
+  // does not exist, don't want to log
   document, err := op.GetDocument(*query)
-  if err != nil {
-    return err
+  if err == nil {
+    fmt.Println(document)
   }
-
-  fmt.Println(document)
   return nil
 }
 
