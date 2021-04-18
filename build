@@ -35,8 +35,8 @@ copy_contents() {
   dst="$1"
   cp "$repo/$app" "$dst/$app"
   ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{}
-  ls -p "$dst" | grep -v / | xargs -n 1 -I {} chmod u+x $dst/{}
-  ls -p "$dst" | grep -v / | xargs -n 1 -I {} codesign --sign "Developer ID Application" -o runtime -v "$dst/{}"
+  find "$dst" -type f | xargs -n 1 chmod u+x
+  find "$dst" -type f | xargs -n 1 codesign --sign "Developer ID Application" -o runtime -v
 }
 
 # pkg
@@ -61,8 +61,8 @@ find "$zip_src" -name '*.DS_Store' -type f -delete
 
 ditto -c -k "$zip_src" "$repo/$app.zip"
 
-# remove unwanted file that shows up in .zip
-zip -d "$repo/$app.zip" "._docker-build"
+# remove unwanted hidden files that show up in .zip
+ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} zip -d "$repo/$app.zip" "._{}"
 
 codesign --sign "Developer ID Application" -o runtime -v "$repo/$app.zip"
 
