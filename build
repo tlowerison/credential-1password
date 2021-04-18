@@ -35,10 +35,9 @@ find "$build_dest" -type f | xargs lipo -create -output "$repo/$name"
 copy_contents() {
   dst="$1"
   cp "$repo/$name" "$dst/$name"
-  codesign --sign "Developer ID Application" "$dst/$name"
-
   ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{}
   ls -p "$dst" | grep -v / | xargs -n 1 -I {} chmod u+x $dst/{}
+  ls -p "$dst" | grep -v / | xargs -n 1 -I {} codesign --sign "Developer ID Application" -o runtime -v "$dst/{}"
 }
 
 # pkg
@@ -66,7 +65,7 @@ ditto -c -k "$zip_src" "$repo/$name.zip"
 # remove unwanted file that shows up in .zip
 zip -d "$repo/$name.zip" "._docker-build"
 
-codesign --sign "Developer ID Application" "$repo/$name.zip"
+codesign --sign "Developer ID Application" -o runtime -v "$repo/$name.zip"
 
 # cleanup
 trap - INT TERM; cleanup
