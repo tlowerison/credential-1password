@@ -1,8 +1,6 @@
-// +build linux
-// WIP
-
 package keystore
 
+// WIP
 import (
   "fmt"
 
