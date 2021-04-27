@@ -28,8 +28,8 @@ Other modes beside `git` and `docker` will effectively use 1Password as a remote
 ```sh
 $ echo $'@scope:registry=https://registry.yarnpkg.com/
 _authToken=<auth-token-here>
-always-auth=true
-' | credential-1password --mode=npm store
+always-auth=true' |
+credential-1password --mode=npm store
 
 $ credential-1password --mode=npm get
 > @scope:registry=https://registry.yarnpkg.com/
@@ -86,8 +86,8 @@ Run:
 echo $'protocol=https
 host=github.com
 username=my-username
-password=my-password
-' | git-credential-1password store
+password=my-password' |
+git-credential-1password store
 
 docker-build -t repo/image:tag .
 ```
