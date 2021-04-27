@@ -86,7 +86,8 @@ Run:
 echo $'protocol=https
 host=github.com
 username=my-username
-password=my-password' | git-credential-1password store
+password=my-password
+' | git-credential-1password store
 
 docker-build -t repo/image:tag .
 ```
