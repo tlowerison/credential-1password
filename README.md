@@ -7,10 +7,9 @@ A credential helper which stores secrets in 1Password and interfaces seamlessly 
 ## Install
 credential-1password relies on 1Password's `op` tool under the hood to manage credentials, first follow the steps to [set up + sign in with op](https://support.1password.com/command-line-getting-started). Then download one of the release archive files:
 - for MacOS, the .pkg file will automatically install `credential-1password`, `git-credential-1password`, `docker-credential-1password` and `docker-build` (see [below](https://github.com/tlowerison/credential-1password/#use-credentials-in-docker-builds))
-- otherwise, use the .zip file, unzipped its contents and move them into your PATH
+- otherwise use the .zip file - unzip and move its contents into PATH
 
 ### Setup with git
-All that's needed is to set the git credential helper.
 ```sh
 # unset existing credential.helper
 git config -f $(git config --show-origin --get credential.helper | sed 's/file://' | sed 's/\t.*//') --unset credential.helper
@@ -19,7 +18,6 @@ git config --global credential.helper 1password
 ```
 
 ### Setup with docker
-Likewise, all that's needed is to set the docker credential helper.
 1. Run `docker logout`.
 2. In ~/.docker/config.json, set credsStore to `"1password"`.
 3. Run `docker login --username=<your-username>`.
@@ -30,7 +28,8 @@ Other modes beside `git` and `docker` will effectively use 1Password as a remote
 ```sh
 $ echo $'@scope:registry=https://registry.yarnpkg.com/
 _authToken=<auth-token-here>
-always-auth=true' | credential-1password --mode=npm store
+always-auth=true
+' | credential-1password --mode=npm store
 
 $ credential-1password --mode=npm get
 > @scope:registry=https://registry.yarnpkg.com/
