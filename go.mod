@@ -2,11 +2,11 @@ module github.com/tlowerison/credential-1password
 
 go 1.16
 
-replace github.com/tlowerison/credential-1password/keystore => ./keystore
-
-replace github.com/tlowerison/credential-1password/op => ./op
-
-replace github.com/tlowerison/credential-1password/util => ./util
+replace (
+  github.com/tlowerison/credential-1password/keystore => ./keystore
+  github.com/tlowerison/credential-1password/op => ./op
+  github.com/tlowerison/credential-1password/util => ./util
+)
 
 require (
 	github.com/spf13/cobra v1.1.3

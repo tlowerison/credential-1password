@@ -8,12 +8,12 @@ import (
 )
 
 // getAttributes
-func getAttributes(key string) secretservice.Attributes {
+func getAttributes(serviceName string, key string) secretservice.Attributes {
   return map[string]string{"name": key}
 }
 
 // getOnLinux
-func getOnLinux(key string) (string, error) {
+func getOnLinux(serviceName string, key string) (string, error) {
   service, err := secretservice.NewService()
   if err != nil {
     return "", err
@@ -40,7 +40,7 @@ func getOnLinux(key string) (string, error) {
 }
 
 // setOnLinux
-func setOnLinux(key string, value string) error {
+func setOnLinux(serviceName string, key string, value string) error {
   service, err := secretservice.NewService()
   if err != nil {
     fmt.Println(err.Error())
@@ -68,5 +68,5 @@ func setOnLinux(key string, value string) error {
   return err
 }
 
-func getOnDarwin(key string) (string, error) { return "", fmt.Errorf("wrong platform") }
-func setOnDarwin(key string, value string) error { return fmt.Errorf("wrong platform") }
+func getOnDarwin(serviceName string, key string) (string, error) { return "", fmt.Errorf(ErrWrongPlatform) }
+func setOnDarwin(serviceName string, key string, value string) error { return fmt.Errorf(ErrWrongPlatform) }

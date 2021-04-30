@@ -14,7 +14,7 @@ zip_src=$(mktemp -d -t "$bundle")
 
 cleanup() {
   crc=$?
-  trap - INT TERM
+  trap - EXIT INT TERM
   if [[ "$build_dst" != "" ]]; then rm -rf "$build_dst"; fi
   if [[ "$pkg_src" != "" ]]; then rm -rf "$pkg_src"; fi
   if [[ "$zip_src" != "" ]]; then rm -rf "$zip_src"; fi
@@ -23,7 +23,15 @@ cleanup() {
   fi
 }
 
-trap "trap - INT TERM; cleanup" INT TERM
+copy_contents() {
+  dst="$1" && \
+  cp "$repo/$app" "$dst/$app" && \
+  ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{} && \
+  find "$dst" -type f | xargs -n 1 chmod u+x && \
+  find "$dst" -type f | xargs -n 1 codesign --sign "Developer ID Application" -o runtime -v
+}
+
+trap "trap - EXIT INT TERM; cleanup" EXIT INT TERM
 
 for build in "${builds[@]}"; do
   combo=( $(echo "$build" | tr "/" " " ) )
@@ -37,19 +45,11 @@ for build in "${builds[@]}"; do
   fi
 done
 
-find "$build_dst" -type f | xargs lipo -create -output "$repo/$app"
-
-copy_contents() {
-  dst="$1"
-  cp "$repo/$app" "$dst/$app"
-  ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} cp $repo/scripts/{} $dst/{}
-  find "$dst" -type f | xargs -n 1 chmod u+x
-  find "$dst" -type f | xargs -n 1 codesign --sign "Developer ID Application" -o runtime -v
-}
+find "$build_dst" -type f | xargs lipo -create -output "$repo/$app" && \
 
 # pkg
 
-copy_contents "$pkg_src"
+copy_contents "$pkg_src" && \
 
 pkgbuild \
   --root="$pkg_src" \
@@ -58,20 +58,20 @@ pkgbuild \
   --install-location="$install_location" \
   --scripts="scripts" \
    --ownership=preserve \
-  "$repo/$app.pkg"
+  "$repo/$app.pkg" && \
 
 # zip
 
-copy_contents "$zip_src"
+copy_contents "$zip_src" && \
 
 # remove .DS_Store files
-find "$zip_src" -name '*.DS_Store' -type f -delete
+find "$zip_src" -name '*.DS_Store' -type f -delete && \
 
-ditto -c -k "$zip_src" "$repo/$app.zip"
+ditto -c -k "$zip_src" "$repo/$app.zip" && \
 
 # remove unwanted hidden files that show up in .zip
-ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} zip -d "$repo/$app.zip" "._{}"
+ls -p "$repo/scripts" | grep -v / | xargs -n 1 -I {} zip -d "$repo/$app.zip" "._{}" && \
 
-codesign --sign "Developer ID Application" -o runtime -v "$repo/$app.zip"
+codesign --sign "Developer ID Application" -o runtime -v "$repo/$app.zip" && \
 
 cleanup

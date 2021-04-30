@@ -21,11 +21,24 @@ func Get(ctx *util.Context) error {
 
   // err should only occur if document
   // does not exist, don't want to log
-  document, err := op.GetDocument(*query)
+  document, err := op.GetDocument(ctx.OpFunc, *query)
   if err == nil {
     fmt.Println(document)
   }
   return nil
+}
+
+func Op(ctx *util.Context, args []string) error {
+  sessionToken, err := ctx.GetSessionToken()
+  if err != nil {
+    return err
+  }
+
+  output, err := op.Op("", append([]string{"--session", sessionToken}, args...))
+  if err == nil {
+    fmt.Println(output)
+  }
+  return err
 }
 
 // Store upserts a credential in 1Password
@@ -36,7 +49,7 @@ func Store(ctx *util.Context) error {
   }
 
   // ignore error because missing documents are returned as errors
-  item, _ := op.GetItem(*query)
+  item, _ := op.GetItem(ctx.OpFunc, *query)
 
   uuid := gjson.Get(item, "uuid").String()
   mode := string(ctx.GetMode())
@@ -51,9 +64,9 @@ func Store(ctx *util.Context) error {
   }
 
   if uuid == "" {
-    _, err = op.CreateDocument(input)
+    _, err = op.CreateDocument(ctx.OpFunc, input)
   } else {
-    _, err = op.EditDocument(input)
+    _, err = op.EditDocument(ctx.OpFunc, input)
   }
 
   return err
@@ -65,7 +78,7 @@ func Erase(ctx *util.Context) error {
   if err != nil {
     return err
   }
-  return op.DeleteDocument(*query)
+  return op.DeleteDocument(ctx.OpFunc, *query)
 }
 
 func Config(ctx *util.Context, args []string) error {
@@ -86,7 +99,7 @@ func ConfigVault(ctx *util.Context, args []string) error {
   }
 
   if len(args) == 0 {
-    if ctx.Flags.ConfigVaultCreate {
+    if ctx.Flags.Config_Vault_Create {
       return ctx.SetVaultName(vaultName, true)
     } else {
       fmt.Println(vaultName)
@@ -94,5 +107,5 @@ func ConfigVault(ctx *util.Context, args []string) error {
     }
   }
 
-  return ctx.SetVaultName(args[0], ctx.Flags.ConfigVaultCreate)
+  return ctx.SetVaultName(args[0], ctx.Flags.Config_Vault_Create)
 }

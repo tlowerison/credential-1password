@@ -6,6 +6,7 @@ import (
   "os"
   "os/exec"
   "regexp"
+  "strconv"
   "strings"
 )
 
@@ -27,9 +28,10 @@ type DocumentUpsert struct {
 }
 
 type CreateVaultMutation struct {
-  Description  string
-  SessionToken string
-  Title        string
+  AllowAdminsToManage bool
+  Description         string
+  SessionToken        string
+  Title               string
 }
 
 var retryRegexps = []*regexp.Regexp{
@@ -37,8 +39,10 @@ var retryRegexps = []*regexp.Regexp{
   regexp.MustCompile("\\[ERROR\\] \\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} Invalid session token"),
 }
 
-// op wraps 1Password's cli tool op.
-func op(stdin string, args []string) (string, error) {
+type OpFunc func(stdin string, args []string) (string, error)
+
+// Op wraps 1Password's cli tool op.
+func Op(stdin string, args []string) (string, error) {
   cmd := exec.Command("op", args...)
 
   if stdin == "" {
@@ -70,46 +74,30 @@ func op(stdin string, args []string) (string, error) {
   return strings.TrimSpace(string(outBytes)), nil
 }
 
-// GetDocument wraps "op get document" and captures stdout/stderr
-func GetVault(input Query) (string, error) {
-  return op("", []string{
-    "get", "vault", input.Key,
-    "--session", input.SessionToken,
-  })
+// ShouldClearSessionAndRetry
+func ShouldClearSessionAndRetry(err error) bool {
+  if err == nil {
+    return false
+  }
+  for _, retryRegexp := range retryRegexps {
+    if retryRegexp.MatchString(err.Error()) {
+      return true
+    }
+  }
+  return false
 }
 
-// CreateVault creates a new 1Passord vault and returns
-// the newly created vault's uuid on success.
-func CreateVault(input CreateVaultMutation) (string, error) {
-  return op("", []string{
-    "create", "vault", input.Title,
-    "--session", input.SessionToken,
-    "--allow-admins-to-manage", "false",
-    "--description", input.Description,
-  })
-}
-
-// GetItem wraps "op get item" and captures stdout/stderr
-func GetItem(input Query) (string, error) {
-  return op("", []string{
-    "get", "item", input.Key,
-    "--session", input.SessionToken,
-    "--vault", input.VaultUUID,
-  })
-}
-
-// GetDocument wraps "op get document" and captures stdout/stderr
-func GetDocument(input Query) (string, error) {
-  return op("", []string{
-    "get", "document", input.Key,
-    "--session", input.SessionToken,
-    "--vault", input.VaultUUID,
-  })
-}
+// wrapped fns
 
 // CreateDocument creates a new 1Passord document
 // and returns the created login's uuid on success.
-func CreateDocument(input DocumentUpsert) (string, error) {
+func CreateDocument(op OpFunc, input DocumentUpsert) (string, error) {
+  baseErrMsg := "failed to create document"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.VaultUUID == ""    { return "", fmt.Errorf("%s: missing vault uuid", baseErrMsg) }
+  if input.Title == ""        { return "", fmt.Errorf("%s: missing document title", baseErrMsg) }
+  if input.FileName == ""     { return "", fmt.Errorf("%s: missing document file name", baseErrMsg) }
+
   return op(input.Content, []string{
     "create", "document", "-",
     "--session", input.SessionToken,
@@ -119,9 +107,45 @@ func CreateDocument(input DocumentUpsert) (string, error) {
   })
 }
 
-// EditDocument edits a 1Passord document by uuid, name, etc.
-// and returns the edited login's uuid on success.
-func EditDocument(input DocumentUpsert) (string, error) {
+// CreateVault creates a new 1Passord vault and returns
+// the newly created vault's uuid on success.
+func CreateVault(op OpFunc, input CreateVaultMutation) (string, error) {
+  baseErrMsg := "failed to create vault"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.Title == ""        { return "", fmt.Errorf("%s: missing title", baseErrMsg) }
+  if input.Description == ""  { return "", fmt.Errorf("%s: missing description", baseErrMsg) }
+
+  return op("", []string{
+    "create", "vault", input.Title,
+    "--session", input.SessionToken,
+    "--description", input.Description,
+    "--allow-admins-to-manage", strconv.FormatBool(input.AllowAdminsToManage),
+  })
+}
+
+// DeleteDocument deletes any document by uuid, name, etc.
+func DeleteDocument(op OpFunc, input Query) error {
+  baseErrMsg := "failed to delete document"
+  if input.SessionToken == "" { return fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.VaultUUID == ""    { return fmt.Errorf("%s: missing vault uuid", baseErrMsg) }
+  if input.Key == ""          { return fmt.Errorf("%s: missing document title", baseErrMsg) }
+
+  _, err := op("", []string{
+    "delete", "document", input.Key,
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+  })
+  return err
+}
+
+// EditDocument edits a 1Passord document by uuid, name,
+// etc. and returns the edited login's uuid on success.
+func EditDocument(op OpFunc, input DocumentUpsert) (string, error) {
+  baseErrMsg := "failed to edit document"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.VaultUUID == ""    { return "", fmt.Errorf("%s: missing vault uuid", baseErrMsg) }
+  if input.Key == ""          { return "", fmt.Errorf("%s: missing document title", baseErrMsg) }
+
   args := []string{
     "edit", "document", input.Key, "-",
     "--session", input.SessionToken,
@@ -139,31 +163,48 @@ func EditDocument(input DocumentUpsert) (string, error) {
   return op(input.Content, args)
 }
 
-// DeleteDocument deletes any document by uuid, name, etc.
-func DeleteDocument(input Query) error {
-  _, err := op("", []string{
-    "delete", "document", input.Key,
+// GetItem wraps "op get item" and captures stdout/stderr
+func GetItem(op OpFunc, input Query) (string, error) {
+  baseErrMsg := "failed to get item"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.VaultUUID == ""    { return "", fmt.Errorf("%s: missing vault uuid", baseErrMsg) }
+  if input.Key == ""          { return "", fmt.Errorf("%s: missing item title", baseErrMsg) }
+
+  return op("", []string{
+    "get", "item", input.Key,
     "--session", input.SessionToken,
     "--vault", input.VaultUUID,
   })
-  return err
+}
+
+// GetDocument wraps "op get document" and captures stdout/stderr
+func GetDocument(op OpFunc, input Query) (string, error) {
+  baseErrMsg := "failed to get document"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.VaultUUID == ""    { return "", fmt.Errorf("%s: missing vault uuid", baseErrMsg) }
+  if input.Key == ""          { return "", fmt.Errorf("%s: missing document title", baseErrMsg) }
+
+  return op("", []string{
+    "get", "document", input.Key,
+    "--session", input.SessionToken,
+    "--vault", input.VaultUUID,
+  })
+}
+
+// GetVault wraps "op get vault" and captures stdout/stderr
+func GetVault(op OpFunc, input Query) (string, error) {
+  baseErrMsg := "failed to get vault"
+  if input.SessionToken == "" { return "", fmt.Errorf("%s: missing session token", baseErrMsg) }
+  if input.Key == ""          { return "", fmt.Errorf("%s: missing vault name", baseErrMsg) }
+
+  return op("", []string{
+    "get", "vault", input.Key,
+    "--session", input.SessionToken,
+  })
 }
 
 // Signin requests the user to sign into 1Password through
 // stdin, then returns the provided session token.
-func Signin() (string, error) {
+func Signin(op OpFunc) (string, error) {
   return op("", []string{"signin", "--raw"})
-}
-
-// ShouldClearSessionAndRetry
-func ShouldClearSessionAndRetry(err error) bool {
-  if err == nil {
-    return false
-  }
-  for _, retryRegexp := range retryRegexps {
-    if retryRegexp.MatchString(err.Error()) {
-      return true
-    }
-  }
-  return false
 }

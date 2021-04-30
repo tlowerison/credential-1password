@@ -9,7 +9,7 @@ import (
 )
 
 // getKeychainItem
-func getKeychainItem() keychain.Item {
+func getKeychainItem(serviceName string) keychain.Item {
   item := keychain.NewItem()
   item.SetSecClass(keychain.SecClassGenericPassword)
   item.SetService(serviceName)
@@ -20,16 +20,16 @@ func getKeychainItem() keychain.Item {
 }
 
 // getOnDarwin
-func getOnDarwin(key string) (string, error) {
-  result, err := queryItem()
+func getOnDarwin(serviceName string, key string) (string, error) {
+  result, err := queryItem(serviceName)
   if err != nil || result == nil {
     return "", err
   }
   return gjson.Get(string(result.Data), key).String(), nil
 }
 
-func itemWithData(data string, key string, value string) (keychain.Item, error) {
-  item := getKeychainItem()
+func itemWithData(serviceName string, data string, key string, value string) (keychain.Item, error) {
+  item := getKeychainItem(serviceName)
   data, err := sjson.Set(data, key, value)
   if err != nil {
     return keychain.Item{}, err
@@ -39,8 +39,8 @@ func itemWithData(data string, key string, value string) (keychain.Item, error) 
 }
 
 // queryItem
-func queryItem() (*keychain.QueryResult, error) {
-  item := getKeychainItem()
+func queryItem(serviceName string) (*keychain.QueryResult, error) {
+  item := getKeychainItem(serviceName)
   item.SetReturnData(true)
   results, err := keychain.QueryItem(item)
   if err != nil {
@@ -48,18 +48,18 @@ func queryItem() (*keychain.QueryResult, error) {
   } else if len(results) == 0 {
     return nil, nil
   } else if len(results) != 1 {
-    return nil, fmt.Errorf("multiple keychain items found")
+    return nil, fmt.Errorf(ErrMultipleKeystoreItemsFound)
   }
   return &results[0], nil
 }
 
 // setOnDarwin
-func setOnDarwin(key string, value string) error {
-  result, err := queryItem()
+func setOnDarwin(serviceName string, key string, value string) error {
+  result, err := queryItem(serviceName)
 
   // add new item
   if err == keychain.ErrorItemNotFound || result == nil {
-    item, dataErr := itemWithData("{}", key, value)
+    item, dataErr := itemWithData(serviceName, "{}", key, value)
     if dataErr != nil {
       return dataErr
     }
@@ -68,12 +68,12 @@ func setOnDarwin(key string, value string) error {
     return err
   }
 
-  item, dataErr := itemWithData(string(result.Data), key, value)
+  item, dataErr := itemWithData(serviceName, string(result.Data), key, value)
   if dataErr != nil {
     return dataErr
   }
   return keychain.UpdateItem(item, item)
 }
 
-func getOnLinux(key string) (string, error) { return "", fmt.Errorf("wrong platform") }
-func setOnLinux(key string, value string) error { return fmt.Errorf("wrong platform") }
+func getOnLinux(serviceName string, key string) (string, error) { return "", fmt.Errorf(ErrWrongPlatform) }
+func setOnLinux(serviceName string, key string, value string) error { return fmt.Errorf(ErrWrongPlatform) }
