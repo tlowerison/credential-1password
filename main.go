@@ -12,8 +12,7 @@ import (
 )
 
 func main() {
-  serviceName := "credential-1password"
-  ctx := util.NewContext(serviceName, op.Op, keystore.NewKeystore(serviceName), os.Stdin)
+  ctx := util.NewContext(op.Op, keystore.NewKeystore(util.ServiceName), os.Stdin)
 
   var rootCmd *cobra.Command
   rootCmd = &cobra.Command{

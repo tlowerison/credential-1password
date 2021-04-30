@@ -70,6 +70,7 @@ const ErrMsgUnknownCommand = "unable to read inputs in the correct format withou
 const ErrMsgDockerServerUrlBadInputZeroLines = "cannot parse url from zero lines of input"
 const ErrMsgDockerServerUrlBadInputMultipleLines = "cannot parse url from multiple lines of input"
 const ErrMsgClosedStdinAfterDeadline = "closed stdin after waiting"
+const ServiceName = "com.tlowerison.credential-1password"
 
 const sessionTokenDateKey = "session-token.date"
 const sessionTokenValueKey = "session-token.value"
@@ -83,14 +84,13 @@ const dockerServerURLKey = "ServerURL"
 const timeFormat = time.UnixDate
 const defaultStdinDeadline = 30 * time.Second
 
-func NewContext(serviceName string, opFunc op.OpFunc, ks keystore.Keystore, stdin io.ReadCloser) *Context {
+func NewContext(opFunc op.OpFunc, ks keystore.Keystore, stdin io.ReadCloser) *Context {
   return &Context{
     Flags:        &Flags{},
     OpFunc:       opFunc,
     opCtx:        &op.Context{},
     inputs:       map[string]string{},
     keystore:     ks,
-    serviceName:  serviceName,
     stdin:        stdin,
     stdinDeadline: defaultStdinDeadline,
   }
@@ -166,9 +166,9 @@ func (ctx *Context) GetMode() Mode {
 func (ctx *Context) GetName() string {
   mode := ctx.GetMode()
   if mode.IsPredefined() {
-    return fmt.Sprintf("%s-%s", string(mode), ctx.serviceName)
+    return fmt.Sprintf("%s-%s", string(mode), "credential-1password")
   }
-  return ctx.serviceName
+  return "credential-1password"
 }
 
 // GetOpQuery wraps an op.Context and the input key provided over

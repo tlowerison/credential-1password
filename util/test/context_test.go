@@ -67,12 +67,12 @@ func TestModeValid(t *testing.T) {
 }
 
 func TestNewContext(t *testing.T) {
-  ctx := util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(""))
+  ctx := util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(""))
   require.NotNil(t, ctx)
 }
 
 func TestContextCmd(t *testing.T) {
-  ctx := util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(""))
+  ctx := util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(""))
   expCmd := &cobra.Command{}
 
   ctx.SetCmd(expCmd)
@@ -83,7 +83,7 @@ func TestContextCmd(t *testing.T) {
 
 func TestContextInputGet(t *testing.T) {
   input := ""
-  ctx := util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx := util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
 
   err := ctx.ParseInput()
@@ -92,7 +92,7 @@ func TestContextInputGet(t *testing.T) {
 
   // timeout (Fail)
   stdin := newTestStdin("")
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), stdin)
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), stdin)
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.SetStdinDeadline(50 * time.Millisecond)
@@ -105,7 +105,7 @@ func TestContextInputGet(t *testing.T) {
 
   // timeout (OK)
   stdin = newTestStdin("")
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), stdin)
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), stdin)
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.SetStdinDeadline(100 * time.Millisecond)
@@ -117,7 +117,7 @@ func TestContextInputGet(t *testing.T) {
 
   // non-predefined mode get
   input = ""
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
 
@@ -129,7 +129,7 @@ func TestContextInputGet(t *testing.T) {
   require.Equal(t, map[string]string{}, inputs)
 
   // posititional arguments shouldn't obfuscate command name
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get <foo> <bar>"})
 
@@ -142,7 +142,7 @@ func TestContextInputGet(t *testing.T) {
 
   // happy path git-credential-1password get
   input = "protocol=https\nhost=github.com"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.Flags.Mode = string(util.GitMode)
@@ -159,7 +159,7 @@ func TestContextInputGet(t *testing.T) {
 
   // empty git-credential-1password get (OK)
   input = ""
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.Flags.Mode = string(util.GitMode)
@@ -169,7 +169,7 @@ func TestContextInputGet(t *testing.T) {
 
   // happy path docker-credential-1password get
   input = "https://index.docker.io/v1/"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.Flags.Mode = string(util.DockerMode)
@@ -185,7 +185,7 @@ func TestContextInputGet(t *testing.T) {
 
   // empty docker-credential-1password get
   input = ""
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.Flags.Mode = string(util.DockerMode)
@@ -196,7 +196,7 @@ func TestContextInputGet(t *testing.T) {
 
   // multiple lines docker-credential-1password get
   input = "https://index.docker.io/v1/\nhttps://index.docker.io/v1/"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "get"})
   ctx.Flags.Mode = string(util.DockerMode)
@@ -208,7 +208,7 @@ func TestContextInputGet(t *testing.T) {
 
 func TestContextInputStore(t *testing.T) {
   input := ""
-  ctx := util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx := util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
 
   err := ctx.ParseInput()
@@ -216,7 +216,7 @@ func TestContextInputStore(t *testing.T) {
   require.Equal(t, util.ErrMsgUnknownCommand, err.Error())
 
   // timeout
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), os.Stdin)
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), os.Stdin)
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
   ctx.SetStdinDeadline(0 * time.Second)
@@ -227,7 +227,7 @@ func TestContextInputStore(t *testing.T) {
 
   // non-predefined mode store
   input = "@scope:registry=https://registry.yarnpkg.com/\n_authToken=my-auth-token\nalways-auth=true"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
 
@@ -240,7 +240,7 @@ func TestContextInputStore(t *testing.T) {
 
   // posititional arguments shouldn't obfuscate command name
   input = "@scope:registry=https://registry.yarnpkg.com/\n_authToken=my-auth-token\nalways-auth=true"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store <foo> <bar>"})
 
@@ -253,7 +253,7 @@ func TestContextInputStore(t *testing.T) {
 
   // happy path git-credential-1password store
   input = "protocol=https\nhost=github.com\nusername=my-username\npassword=my-password"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
   ctx.Flags.Mode = string(util.GitMode)
@@ -272,7 +272,7 @@ func TestContextInputStore(t *testing.T) {
 
   // happy path docker-credential-1password store
   input = "{\"ServerURL\": \"https://index.docker.io/v1/\",\n \"Username\": \"my-username\",\n \"Secret\": \"my-secret\" }"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
   ctx.Flags.Mode = string(util.DockerMode)
@@ -290,7 +290,7 @@ func TestContextInputStore(t *testing.T) {
 
   // empty docker-credential-1password store
   input = ""
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
   ctx.Flags.Mode = string(util.DockerMode)
@@ -301,7 +301,7 @@ func TestContextInputStore(t *testing.T) {
 
   // only url docker-credential-1password store
   input = "https://index.docker.io/v1/"
-  ctx = util.NewContext(serviceName, testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
+  ctx = util.NewContext(testOpFunc, keystore.NewMockKeystore(nil, nil), newTestStdin(input))
   require.NotNil(t, ctx)
   ctx.SetCmd(&cobra.Command{Use: "store"})
   ctx.Flags.Mode = string(util.DockerMode)
