@@ -14,7 +14,7 @@ zip_src=$(mktemp -d -t "$bundle")
 
 cleanup() {
   crc=$?
-  trap - EXIT INT TERM
+  trap - INT TERM
   if [[ "$build_dst" != "" ]]; then rm -rf "$build_dst"; fi
   if [[ "$pkg_src" != "" ]]; then rm -rf "$pkg_src"; fi
   if [[ "$zip_src" != "" ]]; then rm -rf "$zip_src"; fi
@@ -31,7 +31,7 @@ copy_contents() {
   find "$dst" -type f | xargs -n 1 codesign --sign "Developer ID Application" -o runtime -v
 }
 
-trap "trap - EXIT INT TERM; cleanup" EXIT INT TERM
+trap "trap - INT TERM; cleanup" INT TERM
 
 for build in "${builds[@]}"; do
   combo=( $(echo "$build" | tr "/" " " ) )
